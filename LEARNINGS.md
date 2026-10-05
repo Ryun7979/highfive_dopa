@@ -14,6 +14,7 @@
 
 ## Domain Knowledge 業務・仕事の事実
 <!-- 調べて確定した仕様・振る舞い・制約。次回は調べ直さず前提にできるもの -->
+- **リモートは GitHub `Ryun7979/highfive_dopa`（Public）。** プッシュはユーザーの Windows の git（資格情報あり）から行う。
 - **出題文字のサイズ下限**: かな `text-[5rem] md:text-[8rem] lg:text-[10rem]`（10文字以上は `4rem/6rem`）、ローマ字 `text-5xl md:text-7xl lg:text-8xl`、出題エリア `min-h-[50vh]`（`components/GameScreen.tsx`、元アプリの値）。
 - **既存の不具合**: プレイ画面左上の「やめる」ボタンが問題数（MONDAI x/10）表示に重なっている。P1 で直す予定。
 - **Tailwind のクラスは組み立て不可**: v3 のビルド時生成では `bg-${x}` 形式は出力されない。既存コードは全て完全な文字列（`KeyboardHint.tsx` の指の色表など）で問題なし。
@@ -22,7 +23,6 @@
 ## Open Questions 要調整
 <!-- 未解決・保留・意図的にやらなかったこと。解決したら【解決済み】を付けて結論を残す -->
 - **Gemini の Web 画面で効果音・BGM がどこまで作れるか未確認。** 作れない場合は Web Audio での合成（既存 `utils/audioManager.ts` の方式）を続けるか、ユーザーに相談する。
-- **リモートリポジトリが未設定。**
 
 ## Consolidated Principles 統合した原則
 <!-- 個別事例から抽出した、広く通用する判断基準 -->
