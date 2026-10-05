@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>相棒キャラ プレビュー</title>
+<style>
+body{margin:0;font-family:"Zen Maru Gothic",sans-serif;background:#FFD600;color:#1e293b}
+h1{font-size:22px;margin:16px}
+.row{display:flex;flex-wrap:wrap;gap:12px;padding:0 16px 16px}
+.card{background:#fff8e6;border-radius:16px;padding:8px;text-align:center;width:calc(25% - 9px);min-width:150px;box-sizing:border-box}
+.card svg{width:100%;height:auto}
+.card p{margin:4px 0 0;font-weight:700}
+</style></head><body>
+<div id="app"></div>
+<script>
+const PALETTES = {
+  pink: { main:'#F7A8C4', shade:'#EC89AE', light:'#FDE1EB', line:'#7A2E55', cheek:'#F0607F', nose:'#E8603C' },
+  blue: { main:'#8FCDEE', shade:'#68B2DF', light:'#D8EEF8', line:'#2E4A7D', cheek:'#F08A8A', nose:'#E8603C' },
+};
+// 表情パーツ: eyes / mouth / brows / extra
+function eyes(p, kind){
+  const one = (x)=>{
+    const y=262;
+    switch(kind){
+      case 'happy': return `<path d="M${x-26},${y+6} Q${x},${y-26} ${x+26},${y+6}" fill="none" stroke="${p.line}" stroke-width="9" stroke-linecap="round"/>`;
+      case 'miss': { const d=x<200?1:-1; return `<path d="M${x-20*d},${y-18} L${x+18*d},${y} L${x-20*d},${y+18}" fill="none" stroke="${p.line}" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>`; }
+      case 'star':  return `<circle cx="${x}" cy="${y}" r="38" fill="#FFF6DA" stroke="${p.line}" stroke-width="7"/>
+        <path transform="translate(${x},${y+2}) scale(1.25)" d="M0,-20 L6,-7 L20,-6 L9,4 L12,18 L0,11 L-12,18 L-9,4 L-20,-6 L-6,-7Z" fill="${p.line}"/>`;
+      default: return `<circle cx="${x}" cy="${y}" r="38" fill="#FFF6DA" stroke="${p.line}" stroke-width="7"/>
+        <circle cx="${x+3}" cy="${y+3}" r="27" fill="${p.line}"/>
+        <circle cx="${x-7}" cy="${y-8}" r="9" fill="#fff"/><circle cx="${x+14}" cy="${y+14}" r="4.5" fill="#fff"/>`;
+    }
+  };
+  return one(142)+one(258);
+}
+function mouth(p, kind){
+  switch(kind){
+    case 'open':  return `<path d="M184,300 Q200,330 216,300 Z" fill="${p.cheek}" stroke="${p.line}" stroke-width="5" stroke-linejoin="round"/>`;
+    case 'shout': return `<ellipse cx="200" cy="314" rx="17" ry="22" fill="#8A2340" stroke="${p.line}" stroke-width="5"/><ellipse cx="200" cy="325" rx="10" ry="6" fill="${p.cheek}"/>`;
+    case 'wave':  return `<path d="M181,307 q6.5,-8 13,0 t13,0 t13,0" fill="none" stroke="${p.line}" stroke-width="5" stroke-linecap="round"/>`;
+    default:      return `<path d="M185,300 Q200,316 215,300" fill="none" stroke="${p.nose}" stroke-width="6" stroke-linecap="round"/>`;
+  }
+}
+function usagi(pal, exp){
+  const p = PALETTES[pal];
+  const E = {normal:{eyes:'normal',mouth:'smile'},happy:{eyes:'happy',mouth:'open'},shout:{eyes:'star',mouth:'shout'},miss:{eyes:'miss',mouth:'wave'}}[exp];
+  const body = "M66,250 A134,118 0 0 1 334,250 V340 Q334,398 276,398 H124 Q66,398 66,340 Z";
+  const id=`b-${pal}-${exp}`;
+  return `<svg viewBox="0 0 400 440" xmlns="http://www.w3.org/2000/svg">
+  <defs><clipPath id="${id}"><path d="${body}"/></clipPath></defs>
+  <g class="ear-l" transform="rotate(-20 150 150)">
+    <ellipse cx="150" cy="86" rx="38" ry="80" fill="${p.main}" stroke="${p.line}" stroke-width="7"/>
+    <ellipse cx="146" cy="90" rx="15" ry="50" fill="${p.light}"/>
+  </g>
+  <g class="ear-r">
+    <path d="M236,150 Q242,64 290,40 Q330,24 348,60 Q362,92 336,108 Q312,120 296,98 Q276,110 272,150 Z" fill="${p.main}" stroke="${p.line}" stroke-width="7" stroke-linejoin="round"/>
+    <path d="M256,140 Q260,90 286,64" fill="none" stroke="${p.light}" stroke-width="16" stroke-linecap="round"/>
+    <path d="M296,52 Q318,74 298,100" fill="none" stroke="${p.line}" stroke-width="6" stroke-linecap="round"/>
+  </g>
+  <rect x="132" y="372" width="58" height="56" rx="26" fill="${p.main}" stroke="${p.line}" stroke-width="7"/>
+  <rect x="210" y="372" width="58" height="56" rx="26" fill="${p.main}" stroke="${p.line}" stroke-width="7"/>
+  <path d="${body}" fill="${p.shade}"/>
+  <g clip-path="url(#${id})">
+    <ellipse cx="200" cy="262" rx="126" ry="150" fill="${p.main}"/>
+    <ellipse cx="200" cy="396" rx="84" ry="62" fill="${p.light}"/>
+  </g>
+  <path d="${body}" fill="none" stroke="${p.line}" stroke-width="7"/>
+  <path d="M120,206 Q134,198 148,204" fill="none" stroke="${p.line}" stroke-width="6" stroke-linecap="round"/>
+  <path d="M252,204 Q266,198 280,206" fill="none" stroke="${p.line}" stroke-width="6" stroke-linecap="round"/>
+  <ellipse cx="200" cy="296" rx="36" ry="24" fill="${p.light}"/>
+  ${eyes(p,E.eyes)}
+  <ellipse cx="102" cy="312" rx="24" ry="14" fill="${p.cheek}" opacity=".75"/>
+  <ellipse cx="298" cy="312" rx="24" ry="14" fill="${p.cheek}" opacity=".75"/>
+  <path d="M190,283 Q200,279 210,283 Q207,294 200,295 Q193,294 190,283Z" fill="${p.nose}"/>
+  ${mouth(p,E.mouth)}
+  <path d="M128,330 Q112,364 146,378 Q166,384 164,362" fill="none" stroke="${p.line}" stroke-width="7" stroke-linecap="round"/>
+  <path d="M272,330 Q288,364 254,378 Q234,384 236,362" fill="none" stroke="${p.line}" stroke-width="7" stroke-linecap="round"/>
+</svg>`;
+}
+const exps=['normal','happy','shout','miss'];
+let html='';
+for(const pal of ['pink','blue']){
+  html+=`<h1>${pal==='pink'?'ピンク':'ブルー（元デザイン色）'}</h1><div class="row">`;
+  for(const e of exps){ html+=`<div class="card">${usagi(pal,e)}<p>${{normal:'ふつう',happy:'ノリノリ（正解）',shout:'さけぶ（コンボ）',miss:'ずっこけ（ミス）'}[e]}</p></div>`; }
+  html+='</div>';
+}
+document.getElementById('app').innerHTML=html;
+</script></body></html>

@@ -1,0 +1,100 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Typing Master Mini</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Noto+Sans+JP:wght@400;700;900&family=Mochiy+Pop+One&family=Zen+Maru+Gothic:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['"Mochiy Pop One"', '"Noto Sans JP"', 'sans-serif'],
+              mono: ['"JetBrains Mono"', 'monospace'],
+              pop: ['"Mochiy Pop One"', 'sans-serif'],
+              rounded: ['"Zen Maru Gothic"', 'sans-serif'],
+            },
+            animation: {
+              'bounce-short': 'bounce 0.5s infinite',
+              'pulse-fast': 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              'float': 'float 3s ease-in-out infinite',
+              'slide-up': 'slideUp 0.3s ease-out forwards',
+              'spin-slow': 'spin 3s linear infinite',
+            },
+            keyframes: {
+              float: {
+                '0%, 100%': { transform: 'translateY(0)' },
+                '50%': { transform: 'translateY(-10px)' },
+              },
+              slideUp: {
+                '0%': { transform: 'translateY(100%)' },
+                '100%': { transform: 'translateY(0)' },
+              }
+            },
+            boxShadow: {
+              'block': '0px 8px 0px 0px rgba(0,0,0,0.15)',
+              'block-hover': '0px 4px 0px 0px rgba(0,0,0,0.15)',
+              'hard': '4px 4px 0px 0px rgba(0,0,0,1)',
+              'plastic': 'inset 0 2px 0 rgba(255,255,255,0.4), 0 4px 0 rgba(0,0,0,0.1)',
+            },
+            colors: {
+              brand: {
+                yellow: '#FFD600',
+                blue: '#2962FF',
+                red: '#FF1744',
+                green: '#00E676',
+              }
+            }
+          },
+        },
+      }
+    </script>
+    <style>
+      body {
+        background-color: #FFD600;
+        color: #1e293b;
+        overscroll-behavior: none;
+      }
+      .bg-grid-pattern {
+        background-image: 
+          linear-gradient(rgba(255, 255, 255, 0.2) 2px, transparent 2px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.2) 2px, transparent 2px);
+        background-size: 40px 40px;
+        background-position: center top;
+      }
+      
+      @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-5px); }
+        75% { transform: translateX(5px); }
+      }
+      .animate-shake {
+        animation: shake 0.2s ease-in-out;
+      }
+
+      @keyframes fall {
+        0% { transform: translateY(-40px) rotate(0deg) scale(1); opacity: 1; }
+        50% { opacity: 0.9; }
+        100% { transform: translateY(110vh) rotate(720deg) scale(0.5); opacity: 0; }
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "lucide-react": "https://esm.sh/lucide-react@^0.562.0"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
