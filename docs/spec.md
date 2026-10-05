@@ -279,11 +279,13 @@ SP を使ってノードを解放する。前提ノードを取ると次が開�
 
 ### 12.1 既存コードで見つかった課題
 
-| 課題 | 内容 | 対応案 |
+| 課題 | 内容 | 状態 |
 |---|---|---|
-| 実はオフラインで動かない | `index.html` が Tailwind CDN・esm.sh の importmap・Google Fonts を読んでいる | Tailwind・フォントを npm／同梱に切り替え、importmap を削除【推奨】 |
-| 旧AI機能の名残 | `.env.local` に GEMINI_API_KEY、`vite.config.ts` に関連設定の可能性 | dopa では不要なので削除 |
-| パッケージ名 | `typingmini_local_0.4.3` | `highfive_dopa` に変更 |
+| 実はオフラインで動かない | `index.html` が Tailwind CDN・esm.sh の importmap・Google Fonts を読んでいた | **P0 で対応済み**：Tailwind v3（PostCSS）・@fontsource に切り替え、importmap 削除 |
+| 旧AI機能の名残 | `.env.local` の GEMINI_API_KEY、`vite.config.ts` の define | **P0 で対応済み**：削除 |
+| パッケージ名 | `typingmini_local_0.4.3` | **P0 で対応済み**：`highfive_dopa` v0.1.0 |
+| 「やめる」ボタンが問題数表示に重なる | プレイ画面左上で `やめる` ボタンが MONDAI カウンターを隠している（元アプリからの不具合） | P1 のレイアウト見直しで対応 |
+| フォント CSS が大きい | Noto Sans JP 3ウェイト分の @font-face で CSS が約 1MB（gzip 430KB）。実際に読むのは使う文字のサブセットのみ | 必要なら P4 でウェイト削減 |
 
 ### 12.2 保存データ（localStorage）
 
@@ -311,7 +313,7 @@ type SaveData = {
 
 | フェーズ | 内容 | 完了の目安 |
 |---|---|---|
-| P0 準備 | 12.1 の課題対応（オフライン化・名前変更・AI名残の削除）、git 初期化 | `npm run dev` で元と同じに動く |
+| P0 準備 ✅ | 12.1 の課題対応（オフライン化・名前変更・AI名残の削除）、git 初期化 | `npm run dev` で元と同じに動く（2026-10-05 完了） |
 | P1 コア | レイヤー構成、ジュース演出、コンボ、FEVER、スコア、2モード、ラビッドパ（アニメ6種）、演出のつよさ、もじの大きさ | 遊んで「気持ちいい」かつ §3.3 の確認に合格 |
 | P2 成長 | EXP・レベル、スキルツリー、ゴールデンワード／ボーナスタイム、キャラのオーラ・衣装レイヤー | 解放のために何度も遊びたくなる |
 | P3 収集・継続 | コイン、ガチャ、図鑑、デイリーミッション、休けいお知らせ | v1.0 リリース |

@@ -1,20 +1,28 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# highfive_dopa（ドパガキ タイピング）
 
-# Run and deploy your AI Studio app
+視力の弱い子も遊べる、ド派手演出の子ども向けローマ字タイピングゲーム。
+[highfive_7979](../highfive_7979)（TYPING MINI v0.4.3）をベースにしています。
 
-This contains everything you need to run your app locally.
+- 仕様書: [docs/spec.md](docs/spec.md)
+- 相棒キャラ「ラビッドパ」: [docs/character/](docs/character/)（`preview.html` をブラウザで開くとアニメーションを確認できます）
 
-View your app in AI Studio: https://ai.studio/apps/drive/1ETGXtDLYesCo5w-17aTmeV3SLCFOghiV
+## 動かし方
 
-## Run Locally
+前提: Node.js 20 以上
 
-**Prerequisites:**  Node.js
+```bash
+npm install
+npm run dev        # http://localhost:3000
+```
 
+| コマンド | 内容 |
+|---|---|
+| `npm run dev` | 開発サーバー起動 |
+| `npm run build` | 型チェック＋本番ビルド（`dist/`） |
+| `npm run preview` | ビルド結果の確認 |
+| `npm run typecheck` | 型チェックのみ |
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## オフライン動作
+
+Tailwind CSS・フォント・ライブラリはすべてビルドに同梱しており、CDN や外部 API には接続しません。
+`npm install` 後はネットワークなしで開発・ビルド・プレイできます。
