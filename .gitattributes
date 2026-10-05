@@ -1,4 +1,15 @@
-* text=auto eol=lf
+# 改行コード変換を一切行わない（テキストは LF で統一済み。変換を入れるとバイナリ素材が壊れる）
+* -text
+
+# バイナリは差分・マージを試みない
 *.png binary
 *.jpg binary
+*.jpeg binary
 *.gif binary
+*.webp binary
+*.mp3 binary
+*.wav binary
+*.ogg binary
+*.m4a binary
+*.woff binary
+*.woff2 binary

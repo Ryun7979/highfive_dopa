@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Claude Code のマシン固有設定
+.claude/settings.local.json
+
+# Gemini から落とした未採用素材の一時置き場
+_inbox/

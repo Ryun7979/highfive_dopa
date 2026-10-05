@@ -4,6 +4,8 @@
 [highfive_7979](../highfive_7979)（TYPING MINI v0.4.3）をベースにしています。
 
 - 仕様書: [docs/spec.md](docs/spec.md)
+- AI 向けの作業ガイド: [CLAUDE.md](CLAUDE.md)、作業記憶: [LEARNINGS.md](LEARNINGS.md)
+- 素材台帳: [docs/assets.md](docs/assets.md)
 - 相棒キャラ「ラビッドパ」: [docs/character/](docs/character/)（`preview.html` をブラウザで開くとアニメーションを確認できます）
 
 ## 動かし方
