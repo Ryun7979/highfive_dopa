@@ -4,7 +4,7 @@ import { RefreshCw, CheckCircle, XCircle, Clock, CornerDownLeft, Flame, Keyboard
 import { audioManager } from '../utils/audioManager';
 import { BestRecord, EffectLevel } from '../utils/saveData';
 import { getNextRank, RANKS } from '../utils/gameRules';
-import { PlayRewards, expToNext } from '../utils/progression';
+import { PLAY_BONUS_COINS, PlayRewards, expToNext } from '../utils/progression';
 import { ALL_CLEAR_COINS, STREAK_COINS, getMission } from '../utils/daily';
 import { GACHA_COST } from '../utils/gacha';
 import DopaBackground from './DopaBackground';
@@ -305,7 +305,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ stats, rank, isNewBest, pre
                 <div className="hx-unskew flex items-center gap-2">
                   <Coins className="w-7 h-7 text-neon-yellow" strokeWidth={3} />
                   <span className="hx-num text-2xl md:text-3xl text-neon-yellow whitespace-nowrap">コイン +{rewards.coins.toLocaleString()}</span>
-                  <span className="text-sm md:text-base text-white/70 whitespace-nowrap">もってる {rewards.coinsAfter.toLocaleString()}</span>
+                  <span className="text-sm md:text-base text-white/70 whitespace-nowrap">あそんだ ごほうび +{PLAY_BONUS_COINS} こみ　もってる {rewards.coinsAfter.toLocaleString()}</span>
                 </div>
               </div>
               <div className="hx-tag px-5 py-1" style={{ '--edge': 'var(--cyan)' } as React.CSSProperties}>

@@ -4,8 +4,12 @@ import { PlayerData, mutateSave } from './saveData';
 
 // プレイ後にもらえるもの（docs/spec.md §7.3）。数値はすべて【仮】
 
-// 次のレベルまでに必要な EXP。低学年でも最初の1プレイで上がる量にしてある
-export const expToNext = (level: number): number => 100 + 50 * (level - 1);
+// あそんだごほうび：スコアに関係なく1プレイごとにもらえる。はじめての子でも、ほぼ毎回ガチャが引ける量
+export const PLAY_BONUS_COINS = 50;
+export const PLAY_BONUS_EXP = 30;
+
+// 次のレベルまでに必要な EXP。低学年でも最初の1プレイで上がり、後半は数プレイに1回になる
+export const expToNext = (level: number): number => 100 + 35 * (level - 1);
 
 export const calcExp = (score: number): number => Math.floor(score / 10);
 
@@ -26,10 +30,10 @@ export const addExp = (player: PlayerData, exp: number): number => {
 };
 
 export interface PlayRewards {
-  coins: number;      // プレイでもらえた分（ミッションのごほうびは daily.coins）
+  coins: number;      // プレイでもらえた分。あそんだごほうびを含む（ミッションのごほうびは daily.coins）
   coinsAfter: number;
   daily?: DailyResult;
-  exp: number;        // プレイでもらえた分（ミッションのごほうびは daily.exp）
+  exp: number;        // プレイでもらえた分。あそんだごほうびを含む（ミッションのごほうびは daily.exp）
   levelBefore: number;
   levelAfter: number;
   expAfter: number;
@@ -37,8 +41,8 @@ export interface PlayRewards {
 }
 
 export const grantPlayRewards = (stats: GameStats): PlayRewards => {
-  const exp = calcExp(stats.score);
-  const coins = calcCoins(stats);
+  const exp = calcExp(stats.score) + PLAY_BONUS_EXP;
+  const coins = calcCoins(stats) + PLAY_BONUS_COINS;
   let rewards: PlayRewards = { coins, coinsAfter: coins, exp, levelBefore: 1, levelAfter: 1, expAfter: 0, spGain: 0 };
   mutateSave(data => {
     const levelBefore = data.player.level;

@@ -191,7 +191,7 @@ const GachaScreen: React.FC<GachaScreenProps> = ({ effectLevel = 'max', onBack, 
               ))}
             </div>
             <div className="text-sm md:text-base text-neon-yellow text-center">
-              あと <span className="hx-num text-xl md:text-2xl">{GACHA_PITY - gacha.pityCount}</span> かい までに SR いじょうが かならず でる！
+              あと <span className="hx-num text-xl md:text-2xl">{Math.max(1, GACHA_PITY - gacha.pityCount)}</span> かい までに SR いじょうが かならず でる！
               <span className="text-white/70">　おなじ ものは かけらに なり、{SHARDS_TO_EXCHANGE}こで すきな アイテムと こうかん</span>
             </div>
           </div>

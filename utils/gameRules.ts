@@ -1,6 +1,7 @@
 import { Difficulty, Mode, Rank } from '../types';
 
 // 数値はすべて【仮】。P4 のテストプレイで決める（docs/spec.md §6.2 §6.3 §7）
+// ランクしきい値は 2026-10-06 に腕前ごとの試算で一度ならした（§7.2）
 
 export const ARCADE_SECONDS = 60;
 export const ARCADE_WORD_POOL = 200;
@@ -62,7 +63,8 @@ export const RANKS: Rank[] = ['C', 'B', 'A', 'S', 'SS', 'SSS', '∞'];
 
 const BASE_THRESHOLDS: Record<Mode, number[]> = {
   practice: [0, 800, 1400, 2000, 2800, 3600, 6000],
-  arcade: [0, 800, 1600, 3000, 5000, 8000, 20000],
+  // B・A は、はじめての子（2秒に1打）でも ふつう で B に届く高さ
+  arcade: [0, 400, 1200, 3000, 5000, 8000, 20000],
 };
 
 const DIFFICULTY_FACTOR: Record<Mode, Record<Difficulty, number>> = {
@@ -71,19 +73,27 @@ const DIFFICULTY_FACTOR: Record<Mode, Record<Difficulty, number>> = {
     [Difficulty.NORMAL]: 1,
     [Difficulty.HARD]: 1.6,
     [Difficulty.MASTER]: 2.4,
-    [Difficulty.CONVERSATION]: 2.4,
+    // かいわ は1問が「ふつう」に近い長さ（平均 6.7打。ふつう は 5.4打）
+    [Difficulty.CONVERSATION]: 1.2,
   },
+  // 長い単語ほど単語クリアの点が入る回数がへるので、むずかしいほど係数は小さい
   arcade: {
     [Difficulty.EASY]: 0.8,
     [Difficulty.NORMAL]: 1,
-    [Difficulty.HARD]: 1.1,
-    [Difficulty.MASTER]: 1.2,
-    [Difficulty.CONVERSATION]: 1.2,
+    [Difficulty.HARD]: 0.8,
+    [Difficulty.MASTER]: 0.65,
+    [Difficulty.CONVERSATION]: 0.9,
   },
 };
 
+// 係数では合わない組み合わせは、ここに直接書く。
+// れんしゅう × かんたん は1問が 1〜3打で点の幅がせまいので、SS より上を届く高さにつめてある
+const FIXED_THRESHOLDS: Partial<Record<`${Mode}_${Difficulty}`, number[]>> = {
+  [`practice_${Difficulty.EASY}`]: [0, 560, 980, 1400, 1700, 2000, 2300],
+};
+
 export const getRankThresholds = (mode: Mode, difficulty: Difficulty): number[] =>
-  BASE_THRESHOLDS[mode].map(v => Math.round(v * DIFFICULTY_FACTOR[mode][difficulty]));
+  FIXED_THRESHOLDS[`${mode}_${difficulty}`] ?? BASE_THRESHOLDS[mode].map(v => Math.round(v * DIFFICULTY_FACTOR[mode][difficulty]));
 
 export const getRank = (score: number, mode: Mode, difficulty: Difficulty): Rank => {
   const th = getRankThresholds(mode, difficulty);

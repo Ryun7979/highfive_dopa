@@ -47,7 +47,8 @@ export interface SaveData {
 
 const defaultSave = (): SaveData => ({
   version: SAVE_VERSION,
-  player: { level: 1, exp: 0, sp: 0, coins: 0, shards: 0 },
+  // はじめて遊ぶ人は、ガチャ1回ぶんのコインを持って始まる
+  player: { level: 1, exp: 0, sp: 0, coins: 100, shards: 0 },
   bests: {},
   stats: { maxCombo: 0, totalKeys: 0, totalPlays: 0 },
   skills: [],

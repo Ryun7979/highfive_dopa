@@ -7,7 +7,7 @@ export const GACHA_COST = 100;
 // 排出率（%）。画面にもこのまま表示する
 export const GACHA_RATES: Record<Rarity, number> = { N: 60, R: 30, SR: 8, SSR: 2 };
 // 天井：この回数めには SR 以上が必ず出る
-export const GACHA_PITY = 30;
+export const GACHA_PITY = 20;
 // 重複は「かけら」1個になり、この数で好きな未入手アイテムと交換できる
 export const SHARDS_TO_EXCHANGE = 10;
 
