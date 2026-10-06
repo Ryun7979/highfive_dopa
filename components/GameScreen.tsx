@@ -9,6 +9,7 @@ import { FontType } from '../utils/settingsManager';
 import { EffectLevel, TextSize } from '../utils/saveData';
 import { ARCADE_SECONDS, AWAKEN_COMBO, COMBO_CUTIN_EVERY, FEVER_MAX, GAUGE_PER_KEY, GAUGE_PER_WORD, HINT_IDLE_MS, HINT_MISS_COUNT, LUCKY_RATE, getComboTier, keyScore, wordScore } from '../utils/gameRules';
 import { DEFAULT_MODS, GameMods } from '../utils/skills';
+import { createHoldTimer } from '../utils/holdTimer';
 import EffectCanvas, { EffectHandle, RAINBOW } from './EffectCanvas';
 import DopaBackground from './DopaBackground';
 import Rabidopa, { RabidopaHandle } from './Rabidopa';
@@ -16,14 +17,15 @@ import StartCountdown from './StartCountdown';
 
 // タイマー表示専用コンポーネント。親のリ描画を抑える。
 // limitMs を渡すと残り時間のカウントダウンになる（アーケードモード）。
-const GameTimer = memo(({ startTime, limitMs }: { startTime: number; limitMs?: number }) => {
+// pausedAt が 0 でないあいだは、その時刻で止まったままにする（出題が隠れるカットイン中）。
+const GameTimer = memo(({ startTime, limitMs, pausedAt = 0 }: { startTime: number; limitMs?: number; pausedAt?: number }) => {
   const [display, setDisplay] = useState(limitMs ? (limitMs / 1000).toFixed(1) : "0.00");
   const [hurry, setHurry] = useState(false);
   const requestRef = useRef<number>(0);
 
   const update = useCallback(() => {
     if (startTime !== 0) {
-      const now = Date.now();
+      const now = pausedAt || Date.now();
       const elapsed = (now - startTime) / 1000;
       if (limitMs) {
         const remain = Math.max(0, limitMs / 1000 - elapsed);
@@ -34,7 +36,7 @@ const GameTimer = memo(({ startTime, limitMs }: { startTime: number; limitMs?: n
       }
     }
     requestRef.current = requestAnimationFrame(update);
-  }, [startTime, limitMs]);
+  }, [startTime, limitMs, pausedAt]);
 
   useEffect(() => {
     requestRef.current = requestAnimationFrame(update);
@@ -91,7 +93,13 @@ interface CutIn {
   sub?: string;
 }
 const CUTIN_RANK: Record<CutIn['type'], number> = { combo: 1, tier: 2, fever: 3, bonus: 3, awaken: 4 };
-const CUTIN_MS: Record<CutIn['type'], number> = { combo: 1000, tier: 1200, fever: 1400, bonus: 1400, awaken: 1800 };
+const CUTIN_MS: Record<CutIn['type'], number> = { combo: 1000, tier: 1200, fever: 2400, bonus: 1400, awaken: 1800 };
+// 出題が隠れるカットイン。出ているあいだはゲームの時間を止め、次の問題へ進めない
+const CUTIN_HIDES: Record<CutIn['type'], boolean> = { combo: false, tier: true, fever: true, bonus: true, awaken: true };
+
+const FEVER_LAST_MS = 3000;     // FEVER の終わりぎわ（ゲージと枠がいそがしくなる）
+const FEVER_FIREWORK_MS = 600;  // FEVER 中、左右のふちから花火が上がる間隔
+const FEVER_TICKER = Array.from({ length: 14 }, () => 'FEVER!!').join(' ★ ');
 
 interface Popup {
   id: number;
@@ -137,8 +145,15 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
     wordMiss: false, wordStart: 0, wordKeys: 0, finished: false,
     golden: false, bonus: false, bonusScore: 0, goldenCleared: 0, trace: [] as number[],
   });
-  const feverTimerRef = useRef<number | null>(null);
-  const bonusTimerRef = useRef<number | null>(null);
+  // FEVER とボーナスの残り時間。出題が隠れるカットインのあいだは止まる
+  const [timers] = useState(() => ({ fever: createHoldTimer(), feverLast: createHoldTimer(), bonus: createHoldTimer() }));
+  const [feverLast, setFeverLast] = useState(false);
+  // 出題が隠れるカットインが出た時刻。0 なら動いている。正本は ref（キー入力の中ですぐ読むため）
+  const pausedAtRef = useRef(0);
+  const [pausedAt, setPausedAt] = useState(0);
+  const pendingNextRef = useRef(false); // 止まっているあいだに打ち終えた単語がある
+  const nextWordRef = useRef<() => void>(() => {});
+  const fxTimersRef = useRef<number[]>([]);
   const popupIdRef = useRef(0);
   const [cutin, setCutin] = useState<CutIn | null>(null);
   const [ghost, setGhost] = useState<{ id: number; n: number } | null>(null);
@@ -167,6 +182,44 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
     window.setTimeout(() => setPopups(prev => prev.filter(p => p.id !== id)), 1500);
   }, []);
 
+  // ゲームの時間を止める。タイム・FEVER とボーナスの残り・単語の速さの計測が進まなくなる
+  const pauseGame = useCallback(() => {
+    if (pausedAtRef.current !== 0) return;
+    pausedAtRef.current = Date.now();
+    setPausedAt(pausedAtRef.current);
+    timers.fever.hold();
+    timers.feverLast.hold();
+    timers.bonus.hold();
+  }, [timers]);
+
+  // 止めていた分だけ開始時刻を後ろへずらして再開。打ち終えた単語があれば、ここで次の問題へ進む
+  const resumeGame = useCallback(() => {
+    if (pausedAtRef.current === 0) return;
+    const stopped = Date.now() - pausedAtRef.current;
+    pausedAtRef.current = 0;
+    setPausedAt(0);
+    startTimeRef.current += stopped;
+    gameRef.current.wordStart += stopped;
+    lastInputTimeRef.current = Date.now();
+    timers.fever.release();
+    timers.feverLast.release();
+    timers.bonus.release();
+    if (pendingNextRef.current) {
+      pendingNextRef.current = false;
+      setIsSuccess(false);
+      nextWordRef.current();
+    }
+  }, [timers]);
+
+  // 少しあとに出す演出。プレイが終わっていたら出さない
+  const later = useCallback((ms: number, fn: () => void) => {
+    const id = window.setTimeout(() => {
+      fxTimersRef.current = fxTimersRef.current.filter(t => t !== id);
+      if (!gameRef.current.finished) fn();
+    }, ms);
+    fxTimersRef.current.push(id);
+  }, []);
+
   // カットイン。強いもの（FEVER ＞ 段階アップ ＞ ○コンボ）の最中は弱いもので上書きしない。
   // ひかえめでは出さず、下の帯だけにする
   const showCutin = useCallback((c: Omit<CutIn, 'id'>) => {
@@ -181,12 +234,14 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
     }
     cutinRankRef.current = rank;
     setCutin({ ...c, id: ++popupIdRef.current });
+    if (CUTIN_HIDES[c.type]) pauseGame();
     cutinTimerRef.current = window.setTimeout(() => {
       cutinTimerRef.current = null;
       cutinRankRef.current = 0;
       setCutin(null);
+      resumeGame();
     }, CUTIN_MS[c.type]);
-  }, [addPopup, calm]);
+  }, [addPopup, calm, pauseGame, resumeGame]);
 
   // 画面シェイク。ひかえめでは無効
   const shake = useCallback((power: number, duration: number) => {
@@ -223,14 +278,63 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
 
   const endFever = useCallback(() => {
     const g = gameRef.current;
-    feverTimerRef.current = null;
+    timers.feverLast.clear();
     g.fever = false;
     g.gauge = 0;
     setIsFever(false);
+    setFeverLast(false);
     audioManager.setBgmRate(1);
     audioManager.playFeverEnd();
+    // おわりにもう一度はじける
+    if (!calm) {
+      const fx = fxRef.current;
+      fx?.confetti(60);
+      fx?.firework();
+      fx?.firework();
+      fx?.burst(window.innerWidth / 2, window.innerHeight / 2, 50, 1.8);
+      if (fxScale > 0) fx?.flash('#FFFFFF', 0.5 * fxScale);
+      shake(14, 300);
+    }
     syncHud();
-  }, [syncHud]);
+  }, [syncHud, timers, calm, fxScale, shake]);
+
+  // FEVER 突入の演出。カットイン（2.4秒）の進みに合わせて、時間差で出す
+  const feverIntro = useCallback(() => {
+    const fx = fxRef.current;
+    const W = window.innerWidth, H = window.innerHeight;
+    const cx = W / 2, cy = H / 2;
+    fx?.confetti(120);
+    fx?.ring(cx, cy, '#FFFFFF');
+    fx?.ring(cx, cy, '#FFE600');
+    fx?.ring(cx, cy, '#FF2E93');
+    for (let i = 0; i < 3; i++) fx?.firework();
+    invertFlash();
+    // 「FEVER!!」が1文字ずつ叩きつけられるのに合わせて、ゆれてはじける
+    for (let i = 0; i < 7; i++) {
+      later(400 + i * 80, () => {
+        const x = W * (0.29 + i * 0.07);
+        fxRef.current?.ring(x, cy, RAINBOW[i % RAINBOW.length]);
+        fxRef.current?.burst(x, cy, 14, 1.4);
+        shake(12, 110);
+      });
+    }
+    // 花火の連打と紙ふぶきの波
+    later(1000, () => {
+      fxRef.current?.confetti(100);
+      fxRef.current?.flash('#FFE600', 0.6 * fxScale);
+      shake(30, 400);
+    });
+    for (let i = 0; i < 12; i++) later(1000 + i * 95, () => fxRef.current?.firework());
+    later(1700, () => fxRef.current?.confetti(100));
+    // 帯がはじけて消える
+    later(2250, () => {
+      fxRef.current?.burst(cx, cy, 90, 2);
+      fxRef.current?.ring(cx, cy, '#FFFFFF');
+      fxRef.current?.flash('#FFFFFF', 0.8 * fxScale);
+      invertFlash();
+      shake(24, 350);
+    });
+  }, [fxScale, invertFlash, later, shake]);
 
   const startFever = useCallback(() => {
     const g = gameRef.current;
@@ -241,16 +345,21 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
     audioManager.setBgmRate(2);
     // ボーナスタイムと重なったら「W ボーナス」
     showCutin(g.bonus
-      ? { type: 'bonus', text: 'W ボーナス!!', sub: 'スコア ×4' }
-      : { type: 'fever', text: 'FEVER TIME!!', sub: 'スコア ×2' });
-    fxRef.current?.confetti(calm ? 40 : 120);
-    fxRef.current?.firework();
-    fxRef.current?.firework();
-    fxRef.current?.firework();
+      ? { type: 'fever', text: 'W ボーナス!!', sub: 'スコア ×4' }
+      : { type: 'fever', text: 'FEVER!!', sub: 'スコア ×2' });
+    if (calm) {
+      fxRef.current?.confetti(40);
+      for (let i = 0; i < 3; i++) fxRef.current?.firework();
+    } else {
+      feverIntro();
+    }
     if (fxScale > 0) fxRef.current?.flash('#FFFFFF', 0.8 * fxScale);
     shake(26, 500);
-    feverTimerRef.current = window.setTimeout(endFever, mods.feverSeconds * 1000);
-  }, [showCutin, calm, endFever, fxScale, shake, mods.feverSeconds]);
+    // カットインで止まっているあいだは数えない（消えてから 10秒まるごと使える）
+    const ms = mods.feverSeconds * 1000;
+    timers.fever.start(ms, endFever);
+    timers.feverLast.start(Math.max(0, ms - FEVER_LAST_MS), () => setFeverLast(true));
+  }, [showCutin, calm, endFever, feverIntro, fxScale, shake, timers, mods.feverSeconds]);
 
   // スコアを足す。ボーナスタイム中の分は別に数えておく（コインが ×2 になる）
   const addScore = useCallback((points: number) => {
@@ -260,7 +369,6 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
   }, []);
 
   const endBonus = useCallback(() => {
-    bonusTimerRef.current = null;
     gameRef.current.bonus = false;
     setIsBonus(false);
     audioManager.playBonusEnd();
@@ -281,9 +389,8 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
     fxRef.current?.firework();
     if (fxScale > 0) fxRef.current?.flash('#FFD600', 0.7 * fxScale);
     shake(20, 400);
-    if (bonusTimerRef.current !== null) clearTimeout(bonusTimerRef.current);
-    bonusTimerRef.current = window.setTimeout(endBonus, mods.bonusSeconds * 1000);
-  }, [showCutin, calm, endBonus, fxScale, shake, mods.bonusSeconds]);
+    timers.bonus.start(mods.bonusSeconds * 1000, endBonus);
+  }, [showCutin, calm, endBonus, fxScale, shake, timers, mods.bonusSeconds]);
 
   // 正打鍵 1回分のコンボ・スコア・ゲージ・演出
   const registerCorrect = useCallback((char: string) => {
@@ -303,10 +410,11 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
     const x = rect ? rect.left + rect.width / 2 : window.innerWidth / 2;
     const y = rect ? rect.top + rect.height / 2 : window.innerHeight / 2;
     if (fx) {
-      const count = PARTICLES_PER_KEY[tier.level] * (g.fever ? 1.5 : 1) * (calm ? 0.5 : 1);
+      const count = PARTICLES_PER_KEY[tier.level] * (g.fever ? 2.2 : 1) * (calm ? 0.5 : 1);
       fx.burst(x, y, Math.round(count), 0.8 + tier.level * 0.15);
       fx.flyChar(x, y, char.toUpperCase());
-      if (tier.level >= 1) fx.ring(x, y);
+      if (tier.level >= 1 || g.fever) fx.ring(x, y);
+      if (g.fever && !calm) fx.ring(x, y, '#FFFFFF');
       if (fxScale > 0) {
         const color = g.fever || tier.level >= 3 ? RAINBOW[g.combo % RAINBOW.length] : '#FFFFFF';
         fx.flash(color, (0.1 + tier.level * 0.03 + (g.fever ? 0.06 : 0)) * fxScale);
@@ -460,18 +568,32 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
 
   useEffect(() => {
     return () => {
-      if (feverTimerRef.current !== null) clearTimeout(feverTimerRef.current);
-      if (bonusTimerRef.current !== null) clearTimeout(bonusTimerRef.current);
+      timers.fever.clear();
+      timers.feverLast.clear();
+      timers.bonus.clear();
+      fxTimersRef.current.forEach(id => clearTimeout(id));
       if (cutinTimerRef.current !== null) clearTimeout(cutinTimerRef.current);
     };
-  }, []);
+  }, [timers]);
+
+  // FEVER 中は、左右のふちから花火と紙ふぶきが上がりつづける
+  useEffect(() => {
+    if (!isFever || calm || pausedAt !== 0) return;
+    let n = 0;
+    const interval = window.setInterval(() => {
+      const side = n++ % 2 === 0 ? 0.04 : 0.86;
+      fxRef.current?.firework(window.innerWidth * (side + Math.random() * 0.1), window.innerHeight * (0.12 + Math.random() * 0.7));
+      fxRef.current?.confetti(10);
+    }, FEVER_FIREWORK_MS);
+    return () => clearInterval(interval);
+  }, [isFever, calm, pausedAt]);
 
   // 1秒ごとのスコアを残す（次回のゴースト用）。ゴーストがいれば差を出す
   useEffect(() => {
     if (!started) return;
     const interval = window.setInterval(() => {
       const g = gameRef.current;
-      if (g.finished) return;
+      if (g.finished || pausedAtRef.current !== 0) return;
       g.trace.push(g.score);
       if (ghostTrace && ghostTrace.length > 0) {
         setRival(g.score - ghostTrace[Math.min(g.trace.length, ghostTrace.length) - 1]);
@@ -483,7 +605,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
   // アイドル監視（ヒント表示）
   useEffect(() => {
     const interval = window.setInterval(() => {
-      if (startTimeRef.current === 0 || isWaitingForWord) return;
+      if (startTimeRef.current === 0 || isWaitingForWord || pausedAtRef.current !== 0) return;
       if (Date.now() - lastInputTimeRef.current > HINT_IDLE_MS) {
         setShowHint(true);
       }
@@ -496,8 +618,9 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
     const g = gameRef.current;
     if (g.finished) return;
     g.finished = true;
-    if (feverTimerRef.current !== null) clearTimeout(feverTimerRef.current);
-    if (bonusTimerRef.current !== null) clearTimeout(bonusTimerRef.current);
+    timers.fever.clear();
+    timers.feverLast.clear();
+    timers.bonus.clear();
     audioManager.setBgmRate(1);
     audioManager.stopBgm();
     const elapsed = Date.now() - startTimeRef.current;
@@ -516,13 +639,13 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
       goldenCleared: g.goldenCleared,
       trace: [...g.trace, g.score],
     });
-  }, [onGameEnd, difficulty, mode]);
+  }, [onGameEnd, difficulty, mode, timers]);
 
   // アーケードモード：60秒で終了。残り5秒からカウント音
   useEffect(() => {
     if (mode !== 'arcade') return;
     const interval = window.setInterval(() => {
-      if (startTimeRef.current === 0 || gameRef.current.finished) return;
+      if (startTimeRef.current === 0 || gameRef.current.finished || pausedAtRef.current !== 0) return;
       const remain = ARCADE_SECONDS * 1000 - (Date.now() - startTimeRef.current);
       const sec = Math.ceil(remain / 1000);
       if (sec <= 5 && sec > 0 && sec !== lastTickRef.current) {
@@ -558,13 +681,15 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
       setCurrentWord(null);
     }
   }, [currentWordIndex, loadWord, finishGame, mode]);
+  nextWordRef.current = nextWord;
 
   // 単語クリア時のスコア・演出
   const registerWordClear = useCallback(() => {
     const g = gameRef.current;
     const perfect = !g.wordMiss;
     const tier = getComboTier(g.combo);
-    addScore(wordScore(g.wordKeys, Date.now() - g.wordStart, perfect));
+    // 止まっているあいだに打ち終えた単語は、止まった時刻までの速さで数える
+    addScore(wordScore(g.wordKeys, (pausedAtRef.current || Date.now()) - g.wordStart, perfect));
     g.words += 1;
     if (perfect) g.perfects += 1;
     const wasGolden = g.golden;
@@ -616,6 +741,11 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
       registerWordClear();
       setIsSuccess(true);
       setTimeout(() => {
+        // 出題が隠れているあいだは次へ進めない。カットインが消えたときに進む（resumeGame）
+        if (pausedAtRef.current !== 0) {
+          pendingNextRef.current = true;
+          return;
+        }
         setIsSuccess(false);
         nextWord();
       }, 150);
@@ -640,6 +770,8 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
 
   // ミス処理（やさしめ：コンボは 0、ゲージは半分残る。FEVER 中は FEVER が続く）
   const handleMiss = useCallback(() => {
+    // 出題が隠れているあいだの打ちまちがいは、ミスに数えない
+    if (pausedAtRef.current !== 0) return;
     const g = gameRef.current;
     g.missed += 1;
     g.wordMiss = true;
@@ -718,6 +850,8 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
   const kanaSize = currentWord && currentWord.text.length > 9 ? KANA_SIZE[textSize].long : KANA_SIZE[textSize].short;
   const romajiKeys = moras.reduce((sum, m) => sum + (m.romaji[0]?.length ?? 1), 0);
   const multiplier = tier.mult * (isFever ? 2 : 1) * (isBonus ? 2 : 1);
+  // FEVER 中の出題エリアの枠。虹色で鼓動し、終わりぎわは速くなる（拡大方向だけ。文字は小さくならない）
+  const feverFrame = calm ? 'dopa-rainbow-border' : feverLast ? 'hx-fever-frame hx-fever-hurry' : 'hx-fever-frame';
 
   return (
     <div className="relative w-full min-h-screen overflow-hidden font-pop">
@@ -783,7 +917,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
                   <div className="hx-gold-fill -rotate-12 border-4 border-neon-ink rounded-lg px-2 py-0.5 text-neon-ink text-sm md:text-xl whitespace-nowrap shadow-[3px_4px_0_#0B0320]">ボーナス!</div>
                 </div>
                 <div className="absolute left-3 right-3 -bottom-3 h-2 md:h-3 rounded-full bg-neon-ink border-2 border-neon-ink overflow-hidden">
-                  <div key={bonusId} className="h-full hx-gold-fill hx-bonus-drain" style={{ "--bonus": `${mods.bonusSeconds}s` } as React.CSSProperties} />
+                  <div key={bonusId} className="h-full hx-gold-fill hx-bonus-drain" style={{ "--bonus": `${mods.bonusSeconds}s`, animationPlayState: pausedAt ? 'paused' : 'running' } as React.CSSProperties} />
                 </div>
               </>
             )}
@@ -811,7 +945,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
             <div className="hx-tag px-3 py-1 lg:px-5 lg:py-2 min-w-[6rem] lg:min-w-[9rem]" style={{ '--edge': 'var(--pink)' } as React.CSSProperties}>
               <div className="hx-unskew text-center">
                 <div className="text-xs md:text-sm text-neon-pink leading-none mb-1.5 md:mb-2.5">{mode === 'arcade' ? 'のこり' : 'タイム'}</div>
-                <GameTimer startTime={startTimeRef.current} limitMs={mode === 'arcade' ? ARCADE_SECONDS * 1000 : undefined} />
+                <GameTimer startTime={startTimeRef.current} limitMs={mode === 'arcade' ? ARCADE_SECONDS * 1000 : undefined} pausedAt={pausedAt} />
               </div>
             </div>
           </div>
@@ -821,7 +955,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
           {/* 出題エリア。画面高さの50%以上（§3.2-2）。キャラや UI を中に置かない */}
           <div
             ref={questionRef}
-            className={`w-full bg-neon-ink border-y-[10px] overflow-hidden min-h-[50vh] flex items-center justify-center py-6 relative ${isGolden ? 'hx-gold-border' : isFever ? 'dopa-rainbow-border' : tier.level >= 2 ? 'border-neon-yellow dopa-glow-border' : 'border-neon-cyan dopa-glow-cyan'}`}
+            className={`w-full bg-neon-ink border-y-[10px] overflow-hidden min-h-[50vh] flex items-center justify-center py-6 relative ${isGolden ? 'hx-gold-border' : isFever ? feverFrame : tier.level >= 2 ? 'border-neon-yellow dopa-glow-border' : 'border-neon-cyan dopa-glow-cyan'}`}
           >
               {/* 上下のふちを走るテープ。文字にはかからない */}
               <div className={`hx-tape top-0 ${calm ? 'dopa-calm' : ''}`} />
@@ -890,9 +1024,9 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
               <Flame className="w-7 h-7 md:w-10 md:h-10" strokeWidth={3} />
               {isFever ? 'FEVER!!' : 'FEVER'}
             </span>
-            <div className={`hx-gauge h-8 md:h-10 flex-1 ${isFever ? 'dopa-rainbow-border' : ''}`}>
+            <div className={`hx-gauge h-8 md:h-10 flex-1 ${feverLast ? 'dopa-blink' : isFever ? 'dopa-rainbow-border' : ''}`}>
               {isFever ? (
-                <div className="h-full dopa-gauge-fever" style={{ '--fever': `${mods.feverSeconds}s` } as React.CSSProperties} />
+                <div className="h-full dopa-gauge-fever" style={{ '--fever': `${mods.feverSeconds}s`, animationPlayState: pausedAt ? 'paused' : 'running' } as React.CSSProperties} />
               ) : (
                 <div className={`h-full dopa-gauge-fill ${hud.gauge >= FEVER_MAX * 0.8 ? 'dopa-blink' : ''}`} style={{ width: `${Math.min(100, (hud.gauge / FEVER_MAX) * 100)}%` }} />
               )}
@@ -916,11 +1050,17 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
             rainbow={isFever}
             className={`absolute right-0 bottom-0 z-30 h-[161%] aspect-[720/700] ${started && !counting ? '' : 'opacity-0'}`}
           />
+          {/* FEVER 中は左にも、とびはねるラビッドパ（ゲージと重ならない広い画面だけ） */}
+          {isFever && !calm && (
+            <div className="hidden lg:block absolute left-0 bottom-0 z-30 h-[161%] aspect-[720/700] hx-fever-hop">
+              <Rabidopa anim="fever" aura={4} rainbow className="w-full h-full -scale-x-100" />
+            </div>
+          )}
         </div>
       </div>
 
       {/* レイヤー3: 演出（Canvas） */}
-      <EffectCanvas ref={fxRef} maxParticles={calm ? 150 : 300} ambient={calm ? 0 : counting ? 36 : isFever ? 40 : AMBIENT_PER_SEC[tier.level]} />
+      <EffectCanvas ref={fxRef} maxParticles={calm ? 150 : isFever ? 450 : 300} ambient={calm ? 0 : counting ? 36 : isFever ? 70 : AMBIENT_PER_SEC[tier.level]} />
 
       {/* 画面のふちを走るネオン。コンボ段階で太く速くなる */}
       {!calm && (
@@ -991,15 +1131,35 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
             </div>
           )}
           {cutin.type === 'fever' && (
-            <div className="absolute inset-0">
-              <div className="hx-cutin-band hx-cutin-open top-[26vh] h-[48vh] dopa-rainbow-fill">
+            <div className="absolute inset-0 hx-fever-dim">
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="hx-fever-rays" />
+              </div>
+              {/* 上下を逆向きに流れる文字の帯 */}
+              <div className="hx-fever-ticker top-[5vh]"><div className="hx-num hx-sticker hx-fever-ticker-in">{FEVER_TICKER}</div></div>
+              <div className="hx-fever-ticker bottom-[5vh]"><div className="hx-num hx-sticker hx-fever-ticker-in hx-fever-ticker-rev">{FEVER_TICKER}</div></div>
+              <div className="hx-cutin-band hx-fever-band top-[26vh] h-[48vh] dopa-rainbow-fill">
                 <div className="hx-cutin-speed" />
-                <Rabidopa anim="fever" rainbow className="relative h-[42vh] aspect-[720/700] -mt-[8vh] shrink-0" />
-                <div className="relative hx-cutin-slam text-center">
-                  <div className="hx-num hx-sticker text-white text-[10vw] leading-none whitespace-nowrap">FEVER!!</div>
-                  {cutin.sub && <div className="hx-sticker text-neon-yellow text-3xl md:text-6xl whitespace-nowrap">{cutin.sub}</div>}
+                {/* ラビッドパが左右から突っ込んできて、とびはねつづける */}
+                <div className="relative shrink-0 hx-fever-rush-l">
+                  <div className="hx-fever-hop">
+                    <Rabidopa anim="fever" aura={4} rainbow className="h-[42vh] aspect-[720/700] -mt-[8vh]" />
+                  </div>
                 </div>
-                <Rabidopa anim="fever" rainbow className="relative h-[42vh] aspect-[720/700] -mt-[8vh] shrink-0" />
+                <div className="relative text-center">
+                  {/* 1文字ずつ叩きつける */}
+                  <div className="hx-num hx-sticker text-white leading-none whitespace-nowrap" style={{ fontSize: `${cutin.text.length > 7 ? 7 : 10}vw` }}>
+                    {cutin.text.split('').map((c, i) => (
+                      <span key={i} className="hx-fever-letter" style={{ animationDelay: `${0.4 + i * 0.08}s` }}>{c === ' ' ? ' ' : c}</span>
+                    ))}
+                  </div>
+                  {cutin.sub && <div className="hx-sticker hx-fever-sub text-neon-yellow text-3xl md:text-6xl whitespace-nowrap">{cutin.sub}</div>}
+                </div>
+                <div className="relative shrink-0 hx-fever-rush-r">
+                  <div className="hx-fever-hop">
+                    <Rabidopa anim="fever" aura={4} rainbow className="h-[42vh] aspect-[720/700] -mt-[8vh]" />
+                  </div>
+                </div>
               </div>
             </div>
           )}
