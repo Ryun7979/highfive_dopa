@@ -32,14 +32,12 @@ npm run dev        # http://localhost:3000
 2. 設定は既定のまま Deploy を押す（Framework: Vite、Build: `npm run build`、Output: `dist`）
 3. 以後は `main` にプッシュするたびに自動で公開される
 
-公開後の確認（`<URL>` は本番の URL）:
+本番の URL: https://highfivedopa.vercel.app/
+
+公開後の確認:
 
 ```bash
-curl -sI <URL>/ | grep -i x-robots-tag
-```
-
-```bash
-curl -sI <URL>/favicon.svg | grep -i "HTTP/"
+curl -sI https://highfivedopa.vercel.app/favicon.svg | grep -i "HTTP/"
 ```
 
 `/assets/` 以下のファイルに `cache-control: public, max-age=31536000, immutable` が付いていることは、ブラウザの開発者ツール（Network）で確かめます。
@@ -47,8 +45,6 @@ curl -sI <URL>/favicon.svg | grep -i "HTTP/"
 注意:
 
 - **保存データ（レベル・コイン・図鑑）はブラウザの localStorage に、URL ごとに別々に入ります。** プレビュー用の URL と本番の URL では進み具合が共有されません。遊ぶ人には本番の URL だけを渡してください。
-- 検索エンジンには載らないようにしてあります（`noindex`）。ただし URL を知っている人は誰でも開けます。
-
 ## オフライン動作
 
 Tailwind CSS・フォント・ライブラリはすべてビルドに同梱しており、CDN や外部 API には接続しません。
