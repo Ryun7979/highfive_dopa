@@ -371,6 +371,18 @@ class AudioManager {
     [0, 4, 7, 12].forEach(n => this.tone(this.midi(root + n), t + 0.28, 0.4, 'square', 0.14));
   }
 
+  // ○コンボの節目の「ジャキーン」。step が大きいほど高い
+  public playMilestone(step: number) {
+    const ctx = this.ready();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const root = 76 + Math.min(step, 8) * 2;
+    this.noise(t, 0.25, 0.4, 'highpass', 5000);
+    this.tone(this.midi(root), t, 0.12, 'square', 0.2);
+    this.tone(this.midi(root + 7), t + 0.07, 0.4, 'square', 0.18);
+    this.tone(this.midi(root + 12), t + 0.07, 0.5, 'triangle', 0.3);
+  }
+
   public playFeverStart() {
     const ctx = this.ready();
     if (!ctx) return;

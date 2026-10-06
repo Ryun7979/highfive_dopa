@@ -536,6 +536,199 @@ body {
   from { transform: translate(-3px, 2px) rotate(-2deg); }
   to { transform: translate(3px, -2px) rotate(2deg); }
 }
+/* ==========================================================
+   もっと派手に：打鍵の手応え・節目のカットイン・常時のにぎやかさ
+   ========================================================== */
+
+/* 打ったローマ字が1文字ずつはじけて入る */
+.hx-char-hit {
+  display: inline-block;
+  animation: hx-char-hit 0.24s cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+@keyframes hx-char-hit {
+  0% { transform: scale(2.6) rotate(-14deg); color: #fff; filter: brightness(2.2); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+
+/* 画面いっぱいのコンボ数。ふちどりだけで中は透明 */
+.hx-ghost-combo {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 62vh;
+  line-height: 1;
+  color: transparent;
+  -webkit-text-stroke: 7px rgba(255, 255, 255, 0.6);
+  animation: hx-ghost 0.55s ease-out forwards;
+}
+@keyframes hx-ghost {
+  0% { transform: scale(0.4) rotate(-8deg); opacity: 1; }
+  100% { transform: scale(1.5) rotate(4deg); opacity: 0; }
+}
+
+/* 燃える数字 */
+.hx-fire {
+  animation: hx-fire 0.16s steps(2, jump-none) infinite alternate;
+}
+@keyframes hx-fire {
+  0% { text-shadow: 0 0.1em 0 var(--ink), 0 -0.12em 0.25em #FFE600, 0.04em -0.3em 0.4em #FF7A00, -0.05em -0.5em 0.6em #FF2440; }
+  100% { text-shadow: 0 0.1em 0 var(--ink), 0 -0.18em 0.3em #FFE600, -0.06em -0.38em 0.45em #FF7A00, 0.06em -0.62em 0.7em #FF2440; }
+}
+
+/* 画面のふちを走るネオン */
+.hx-edge {
+  position: fixed;
+  z-index: 44;
+  pointer-events: none;
+  background-image: linear-gradient(90deg, var(--cyan), var(--pink), var(--cyan));
+  background-size: 50% 100%;
+  box-shadow: 0 0 18px var(--cyan);
+  animation: hx-edge-x var(--edge-spd, 2.4s) linear infinite;
+}
+.hx-edge-rainbow .hx-edge {
+  background-image: linear-gradient(90deg, #FF2440, #FFE600, #B6FF00, #00F0FF, #8B2BFF, #FF2E93, #FF2440);
+  box-shadow: 0 0 26px #fff;
+}
+.hx-edge-top { top: 0; left: 0; right: 0; height: var(--edge-w, 4px); }
+.hx-edge-bottom { bottom: 0; left: 0; right: 0; height: var(--edge-w, 4px); animation-direction: reverse; }
+.hx-edge-left,
+.hx-edge-right {
+  top: 0;
+  bottom: 0;
+  width: var(--edge-w, 4px);
+  background-image: linear-gradient(180deg, var(--cyan), var(--pink), var(--cyan));
+  background-size: 100% 50%;
+  animation-name: hx-edge-y;
+}
+.hx-edge-rainbow .hx-edge-left,
+.hx-edge-rainbow .hx-edge-right {
+  background-image: linear-gradient(180deg, #FF2440, #FFE600, #B6FF00, #00F0FF, #8B2BFF, #FF2E93, #FF2440);
+}
+.hx-edge-left { left: 0; animation-direction: reverse; }
+.hx-edge-right { right: 0; }
+@keyframes hx-edge-x {
+  to { background-position: 100vw 0; }
+}
+@keyframes hx-edge-y {
+  to { background-position: 0 100vh; }
+}
+
+/* 集中線。中央（出題文字のあたり）は抜いてある */
+.hx-speedlines {
+  position: fixed;
+  inset: -25%;
+  z-index: 43;
+  pointer-events: none;
+  background: repeating-conic-gradient(from 0deg, rgba(255, 255, 255, 0.55) 0deg 0.5deg, rgba(255, 255, 255, 0) 0.5deg 4.5deg);
+  -webkit-mask-image: radial-gradient(circle, transparent 38%, #000 80%);
+  mask-image: radial-gradient(circle, transparent 38%, #000 80%);
+  animation: hx-speedlines 0.14s steps(2, jump-none) infinite;
+}
+@keyframes hx-speedlines {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(2.2deg) scale(1.03); }
+}
+
+/* カットインの帯 */
+.hx-cutin-band {
+  position: absolute;
+  left: -10vw;
+  right: -10vw;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2vw;
+  border-top: 7px solid var(--ink);
+  border-bottom: 7px solid var(--ink);
+  box-shadow: 0 0 0 5px #fff, 0 0 60px rgba(255, 255, 255, 0.9);
+}
+.hx-cutin-speed {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.55) 0 10px, rgba(255, 255, 255, 0) 10px 70px, rgba(11, 3, 32, 0.25) 70px 76px, rgba(255, 255, 255, 0) 76px 160px);
+  background-size: 160px 100%;
+  -webkit-mask-image: repeating-linear-gradient(0deg, #000 0 6px, transparent 6px 22px);
+  mask-image: repeating-linear-gradient(0deg, #000 0 6px, transparent 6px 22px);
+  animation: hx-cutin-speed 0.18s linear infinite;
+}
+@keyframes hx-cutin-speed {
+  to { background-position: -160px 0; }
+}
+/* ○コンボ：右から突っ込んで左へ抜ける */
+.hx-cutin-slide {
+  animation: hx-cutin-slide 1s cubic-bezier(0.2, 1.2, 0.3, 1) forwards;
+}
+@keyframes hx-cutin-slide {
+  0% { transform: translateX(120vw) skewY(-2deg); }
+  16% { transform: translateX(0) skewY(-2deg); }
+  78% { transform: translateX(-3vw) skewY(-2deg); }
+  100% { transform: translateX(-130vw) skewY(-2deg); }
+}
+/* FEVER：中央の大帯がガバッと開く */
+.hx-cutin-open {
+  width: 120vw;
+  animation: hx-cutin-open 1.4s cubic-bezier(0.2, 1.4, 0.3, 1) forwards;
+}
+@keyframes hx-cutin-open {
+  0% { transform: scaleY(0) skewY(-3deg); }
+  12% { transform: scaleY(1.15) skewY(-3deg); }
+  20% { transform: scaleY(1) skewY(-3deg); }
+  84% { transform: scaleY(1) skewY(-3deg); }
+  100% { transform: scaleY(0) skewY(-3deg); }
+}
+/* 段階アップ：ラビッドパが右下から中央へ飛び出して戻る */
+.hx-cutin-jump {
+  animation: hx-cutin-jump 1.2s cubic-bezier(0.2, 1.3, 0.4, 1) forwards;
+}
+@keyframes hx-cutin-jump {
+  0% { transform: translate(42vw, 40vh) scale(0.2) rotate(40deg); opacity: 0; }
+  22% { transform: translate(0, 0) scale(1.18) rotate(-8deg); opacity: 1; }
+  34% { transform: translate(0, 0) scale(1) rotate(5deg); opacity: 1; }
+  74% { transform: translate(0, 0) scale(1.06) rotate(-4deg); opacity: 1; }
+  100% { transform: translate(42vw, 40vh) scale(0.2) rotate(40deg); opacity: 0; }
+}
+.hx-cutin-rays {
+  width: 150vmax;
+  height: 150vmax;
+  flex: none;
+  background: repeating-conic-gradient(from 0deg, rgba(255, 230, 0, 0.75) 0deg 8deg, rgba(255, 46, 147, 0.55) 8deg 16deg);
+  -webkit-mask-image: radial-gradient(circle, #000 0%, transparent 62%);
+  mask-image: radial-gradient(circle, #000 0%, transparent 62%);
+  animation: hx-cutin-rays 1.2s linear forwards;
+}
+@keyframes hx-cutin-rays {
+  0% { transform: rotate(0deg) scale(0.2); opacity: 0; }
+  20% { transform: rotate(30deg) scale(1); opacity: 1; }
+  75% { transform: rotate(110deg) scale(1); opacity: 1; }
+  100% { transform: rotate(140deg) scale(1.2); opacity: 0; }
+}
+.hx-cutin-slam {
+  animation: hx-cutin-slam 1.2s cubic-bezier(0.2, 1.6, 0.4, 1) forwards;
+}
+@keyframes hx-cutin-slam {
+  0% { transform: scale(6) rotate(-12deg); opacity: 0; }
+  18% { transform: scale(0.9) rotate(3deg); opacity: 1; }
+  28% { transform: scale(1) rotate(-2deg); opacity: 1; }
+  80% { transform: scale(1.04) rotate(-2deg); opacity: 1; }
+  100% { transform: scale(1.3) rotate(-2deg); opacity: 0; }
+}
+
+/* 背景をのぼっていく文字と星 */
+.dopa-glyph {
+  position: absolute;
+  bottom: -14vh;
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 800;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.2);
+  animation: dopa-glyph var(--d, 9s) linear infinite;
+}
+@keyframes dopa-glyph {
+  to { transform: translateY(-130vh) rotate(360deg); }
+}
+
 /* 縦に収まらない画面ではスクロールできるが、演出の拡大でスクロールバーがちらつかないよう隠す */
 .dopa-scroll {
   scrollbar-width: none;

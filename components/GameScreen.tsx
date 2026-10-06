@@ -7,7 +7,7 @@ import { parseKanaToMora, Mora } from '../utils/romajiUtils';
 import { audioManager } from '../utils/audioManager';
 import { FontType } from '../utils/settingsManager';
 import { EffectLevel, TextSize } from '../utils/saveData';
-import { ARCADE_SECONDS, FEVER_MAX, FEVER_SECONDS, getComboTier, keyScore, wordScore } from '../utils/gameRules';
+import { ARCADE_SECONDS, COMBO_CUTIN_EVERY, FEVER_MAX, FEVER_SECONDS, GAUGE_KEEP_ON_MISS, GAUGE_PER_KEY, GAUGE_PER_WORD, HINT_IDLE_MS, HINT_MISS_COUNT, getComboTier, keyScore, wordScore } from '../utils/gameRules';
 import EffectCanvas, { EffectHandle, RAINBOW } from './EffectCanvas';
 import DopaBackground from './DopaBackground';
 import Rabidopa, { RabidopaHandle } from './Rabidopa';
@@ -74,6 +74,18 @@ const COMBO_COLOR = ['text-white', 'text-neon-yellow', 'text-neon-orange', 'text
 const PARTICLES_PER_KEY = [8, 14, 20, 28, 40];
 const AMBIENT_PER_SEC = [0, 2, 6, 14, 30];
 
+const EDGE_WIDTH = ['4px', '6px', '8px', '10px', '14px'];
+
+// カットイン：○コンボの節目（上の帯）／段階アップ（ラビッドパが中央へ飛び出す）／FEVER 突入（中央の大帯）
+interface CutIn {
+  id: number;
+  type: 'combo' | 'tier' | 'fever';
+  text: string;
+  sub?: string;
+}
+const CUTIN_RANK: Record<CutIn['type'], number> = { combo: 1, tier: 2, fever: 3 };
+const CUTIN_MS: Record<CutIn['type'], number> = { combo: 1000, tier: 1200, fever: 1400 };
+
 interface Popup {
   id: number;
   kind: 'word' | 'banner';
@@ -113,6 +125,11 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
   });
   const feverTimerRef = useRef<number | null>(null);
   const popupIdRef = useRef(0);
+  const [cutin, setCutin] = useState<CutIn | null>(null);
+  const [ghost, setGhost] = useState<{ id: number; n: number } | null>(null);
+  const cutinTimerRef = useRef<number | null>(null);
+  const cutinRankRef = useRef(0);
+  const kanaRef = useRef<HTMLDivElement>(null);
   const lastTickRef = useRef(0);
 
   const fxRef = useRef<EffectHandle>(null);
@@ -134,6 +151,27 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
     setPopups(prev => [...prev.slice(-3), { ...popup, id }]);
     window.setTimeout(() => setPopups(prev => prev.filter(p => p.id !== id)), 1500);
   }, []);
+
+  // カットイン。強いもの（FEVER ＞ 段階アップ ＞ ○コンボ）の最中は弱いもので上書きしない。
+  // ひかえめでは出さず、下の帯だけにする
+  const showCutin = useCallback((c: Omit<CutIn, 'id'>) => {
+    if (calm) {
+      addPopup({ kind: 'banner', text: c.text, sub: c.sub });
+      return;
+    }
+    const rank = CUTIN_RANK[c.type];
+    if (cutinTimerRef.current !== null) {
+      if (rank < cutinRankRef.current) return;
+      clearTimeout(cutinTimerRef.current);
+    }
+    cutinRankRef.current = rank;
+    setCutin({ ...c, id: ++popupIdRef.current });
+    cutinTimerRef.current = window.setTimeout(() => {
+      cutinTimerRef.current = null;
+      cutinRankRef.current = 0;
+      setCutin(null);
+    }, CUTIN_MS[c.type]);
+  }, [addPopup, calm]);
 
   // 画面シェイク。ひかえめでは無効
   const shake = useCallback((power: number, duration: number) => {
@@ -186,7 +224,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
     setIsFever(true);
     audioManager.playFeverStart();
     audioManager.setBgmRate(2);
-    addPopup({ kind: 'banner', text: 'FEVER TIME!!', sub: 'スコア ×2' });
+    showCutin({ type: 'fever', text: 'FEVER TIME!!', sub: 'スコア ×2' });
     fxRef.current?.confetti(calm ? 40 : 120);
     fxRef.current?.firework();
     fxRef.current?.firework();
@@ -194,7 +232,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
     if (fxScale > 0) fxRef.current?.flash('#FFFFFF', 0.8 * fxScale);
     shake(26, 500);
     feverTimerRef.current = window.setTimeout(endFever, FEVER_SECONDS * 1000);
-  }, [addPopup, calm, endFever, fxScale, shake]);
+  }, [showCutin, calm, endFever, fxScale, shake]);
 
   // 正打鍵 1回分のコンボ・スコア・ゲージ・演出
   const registerCorrect = useCallback((char: string) => {
@@ -230,19 +268,38 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
     if (tier.level > prevLevel) {
       audioManager.playComboUp(tier.level);
       audioManager.setBgmIntensity(tier.level);
-      addPopup({ kind: 'banner', text: tier.shout, sub: `${g.combo} コンボ  スコア ×${tier.mult}` });
+      showCutin({ type: 'tier', text: tier.shout, sub: `${g.combo} コンボ  スコア ×${tier.mult}` });
       fx?.confetti(calm ? 20 : 30 * tier.level);
       for (let i = 0; i < tier.level; i++) fx?.firework();
       shake(10 + tier.level * 5, 350);
+    } else if (g.combo % COMBO_CUTIN_EVERY === 0) {
+      // ○コンボごとの節目
+      audioManager.playMilestone(g.combo / COMBO_CUTIN_EVERY);
+      showCutin({ type: 'combo', text: `${g.combo} コンボ!!` });
+      fx?.confetti(calm ? 10 : 40);
+      fx?.firework();
     }
+
+    // 出題文字が1打ごとに跳ねて光る。拡大方向だけなので下限サイズは割らない
+    if (fxScale > 0 && kanaRef.current) {
+      kanaRef.current.animate(
+        [
+          { transform: `scale(${1 + 0.08 * fxScale}) rotate(${g.combo % 2 ? -1.5 : 1.5}deg)`, filter: 'brightness(1.7)' },
+          { transform: 'scale(1) rotate(0deg)', filter: 'brightness(1)' },
+        ],
+        { duration: 170, easing: 'ease-out' }
+      );
+    }
+    // 5コンボごとに、コンボ数が画面いっぱいに一瞬出る（ふちどりだけなので出題は読める）
+    if (!calm && g.combo % 5 === 0) setGhost({ id: ++popupIdRef.current, n: g.combo });
 
     // フィーバーゲージ
     if (!g.fever) {
-      g.gauge += 1;
+      g.gauge = Math.min(FEVER_MAX, g.gauge + GAUGE_PER_KEY);
       if (g.gauge >= FEVER_MAX) startFever();
     }
     syncHud();
-  }, [addPopup, calm, fxScale, shake, startFever, syncHud, zoomPulse]);
+  }, [showCutin, calm, fxScale, shake, startFever, syncHud, zoomPulse]);
 
   // 次の文字ヒントを更新
   const updateHintKey = useCallback((currentMoras: Mora[], moraIdx: number, currentInput: string) => {
@@ -301,6 +358,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
   useEffect(() => {
     return () => {
       if (feverTimerRef.current !== null) clearTimeout(feverTimerRef.current);
+      if (cutinTimerRef.current !== null) clearTimeout(cutinTimerRef.current);
     };
   }, []);
 
@@ -308,7 +366,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
   useEffect(() => {
     const interval = window.setInterval(() => {
       if (startTimeRef.current === 0 || isWaitingForWord) return;
-      if (Date.now() - lastInputTimeRef.current > 10000) {
+      if (Date.now() - lastInputTimeRef.current > HINT_IDLE_MS) {
         setShowHint(true);
       }
     }, 1000);
@@ -407,8 +465,13 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
     shake(perfect ? 14 : 8, 220);
     zoomPulse(1.05);
     if (tier.level >= 3) invertFlash();
+    // 単語クリアでもゲージがたまる
+    if (!g.fever) {
+      g.gauge = Math.min(FEVER_MAX, g.gauge + GAUGE_PER_WORD);
+      if (g.gauge >= FEVER_MAX) startFever();
+    }
     syncHud();
-  }, [addPopup, calm, fxScale, invertFlash, shake, syncHud, zoomPulse]);
+  }, [addPopup, calm, fxScale, invertFlash, shake, startFever, syncHud, zoomPulse]);
 
   // モーラの進行
   const advanceMora = useCallback((nextInputForState: string, isLookaheadSkip: boolean = false) => {
@@ -445,7 +508,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
     g.missed += 1;
     g.wordMiss = true;
     g.combo = 0;
-    if (!g.fever) g.gauge = Math.floor(g.gauge / 2);
+    if (!g.fever) g.gauge = Math.floor(g.gauge * GAUGE_KEEP_ON_MISS);
     audioManager.playCrash();
     audioManager.setBgmIntensity(0);
     rabbitRef.current?.play('miss');
@@ -456,7 +519,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
     setIsError(true);
     setTimeout(() => setIsError(false), 200);
     missCountRef.current += 1;
-    if (missCountRef.current >= 5) setShowHint(true);
+    if (missCountRef.current >= HINT_MISS_COUNT) setShowHint(true);
   }, [fxScale, shake, syncHud]);
 
   // キー入力ハンドラ
@@ -587,7 +650,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
             <div className="w-24 lg:w-44 text-center">
               {hud.combo >= 2 && (
                 <div className={tier.level >= 1 ? 'dopa-wiggle' : ''}>
-                  <div key={hud.combo} className={`hx-num hx-sticker dopa-combo-pop text-5xl md:text-7xl leading-none ${COMBO_COLOR[tier.level]}`}>
+                  <div key={hud.combo} className={`hx-num hx-sticker dopa-combo-pop text-5xl md:text-7xl leading-none ${COMBO_COLOR[tier.level]} ${tier.level >= 2 && !calm ? 'hx-fire' : ''}`}>
                     {hud.combo}
                   </div>
                   <div className="hx-num hx-sticker text-xl md:text-3xl text-white leading-none">COMBO</div>
@@ -621,6 +684,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
                  ) : (
                    <div className="flex flex-col items-center justify-center space-y-8 w-full">
                       <div
+                        ref={kanaRef}
                         className={`text-white font-black ${fontClass} tracking-wider text-center break-keep leading-tight drop-shadow-[4px_4px_0px_rgba(0,0,0,0.5)] ${kanaSize} ${isFever ? 'dopa-rainbow-text' : ''}`}
                         style={{ '--chars': currentWord.text.length } as React.CSSProperties}
                       >
@@ -643,7 +707,12 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
                                ref={idx === currentMoraIndex ? curMoraRef : undefined}
                                className={`flex ${ROMAJI_SIZE[textSize]} font-mono font-bold mx-1 md:mx-2 relative tracking-widest`}
                              >
-                               <span className="text-neon-yellow drop-shadow-[0_4px_0_rgba(0,0,0,0.8)]">{typedPart}</span>
+                               <span className="text-neon-yellow drop-shadow-[0_4px_0_rgba(0,0,0,0.8)]">
+                                 {/* 打った文字は1文字ずつはじけて入る */}
+                                 {typedPart.split('').map((c, i) => (
+                                   <span key={i} className={calm ? '' : 'hx-char-hit'}>{c}</span>
+                                 ))}
+                               </span>
                                <span className="text-slate-400">{untypedPart}</span>
                                {idx === currentMoraIndex && (
                                  <div className="absolute -bottom-4 left-0 w-full h-3 bg-neon-yellow animate-pulse rounded-full shadow-[0_0_14px_rgba(255,230,0,0.9)]" />
@@ -678,13 +747,13 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
               )}
             </div>
             <span className="hx-num hx-sticker shrink-0 w-24 md:w-32 text-left text-xl md:text-2xl text-white">
-              {isFever ? 'スコア×2' : `${hud.gauge}/${FEVER_MAX}`}
+              {isFever ? 'スコア×2' : `${hud.gauge}%`}
             </span>
           </div>
           {textSize === 'normal' && (
             <div className={`mr-[18vh] lg:mr-0 transition-opacity duration-300 ${!isWaitingForWord && currentWord && hud.combo === 0 ? 'opacity-100' : 'opacity-0'}`}>
               <div className="hx-tag px-8 py-1" style={{ '--edge': 'var(--yellow)' } as React.CSSProperties}>
-                 <p className="hx-unskew text-xl md:text-3xl text-neon-yellow tracking-wide animate-pulse">キーボードから文字を入力！</p>
+                 <p className="hx-unskew text-xl md:text-3xl text-neon-yellow tracking-wide animate-pulse">キーボードで もじを うとう！</p>
               </div>
             </div>
           )}
@@ -702,7 +771,75 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
       {/* レイヤー3: 演出（Canvas） */}
       <EffectCanvas ref={fxRef} maxParticles={calm ? 150 : 300} ambient={calm ? 0 : isFever ? 40 : AMBIENT_PER_SEC[tier.level]} />
 
-      {/* GREAT! / PERFECT!! / 段階アップ / FEVER の文字 */}
+      {/* 画面のふちを走るネオン。コンボ段階で太く速くなる */}
+      {!calm && (
+        <div
+          className={isFever || tier.level >= 3 ? 'hx-edge-rainbow' : ''}
+          style={{ '--edge-w': isFever ? '18px' : EDGE_WIDTH[tier.level], '--edge-spd': isFever ? '0.5s' : `${2.4 - tier.level * 0.45}s` } as React.CSSProperties}
+        >
+          <div className="hx-edge hx-edge-top" />
+          <div className="hx-edge hx-edge-bottom" />
+          <div className="hx-edge hx-edge-left" />
+          <div className="hx-edge hx-edge-right" />
+        </div>
+      )}
+
+      {/* 集中線。コンボ 12 以上と FEVER 中 */}
+      {!calm && (tier.level >= 2 || isFever) && <div className="hx-speedlines" />}
+
+      {/* 5コンボごとに画面いっぱいのコンボ数（ふちどりだけ） */}
+      {ghost && (
+        <div key={ghost.id} className="fixed inset-0 z-[44] pointer-events-none overflow-hidden">
+          <div className="hx-ghost-combo hx-num">{ghost.n}</div>
+        </div>
+      )}
+
+      {/* カットイン */}
+      {cutin && (
+        <div key={cutin.id} className="fixed inset-0 z-[46] pointer-events-none overflow-hidden font-pop">
+          {cutin.type === 'combo' && (
+            <div className="hx-cutin-band hx-cutin-slide top-[1vh] h-[15vh] bg-neon-pink">
+              <div className="hx-cutin-speed" />
+              <Rabidopa anim="shout" className="relative h-[24vh] aspect-[720/700] -mt-[6vh]" />
+              <div className="relative hx-num hx-sticker text-neon-yellow text-6xl md:text-8xl whitespace-nowrap">{cutin.text}</div>
+              <Rabidopa anim="shout" className="relative h-[24vh] aspect-[720/700] -mt-[6vh]" />
+            </div>
+          )}
+          {cutin.type === 'tier' && (
+            <>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="hx-cutin-rays" />
+              </div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="hx-cutin-jump">
+                  <Rabidopa anim="shout" aura={4} className="h-[78vh] aspect-[720/700]" />
+                </div>
+              </div>
+              <div className="absolute inset-x-0 bottom-[5vh] flex justify-center">
+                <div className="hx-cutin-slam text-center">
+                  <div className="hx-sticker text-neon-yellow text-7xl md:text-9xl whitespace-nowrap">{cutin.text}</div>
+                  {cutin.sub && <div className="hx-sticker text-white text-2xl md:text-4xl whitespace-nowrap">{cutin.sub}</div>}
+                </div>
+              </div>
+            </>
+          )}
+          {cutin.type === 'fever' && (
+            <div className="absolute inset-0">
+              <div className="hx-cutin-band hx-cutin-open top-[26vh] h-[48vh] dopa-rainbow-fill">
+                <div className="hx-cutin-speed" />
+                <Rabidopa anim="fever" rainbow className="relative h-[42vh] aspect-[720/700] -mt-[8vh] shrink-0" />
+                <div className="relative hx-cutin-slam text-center">
+                  <div className="hx-num hx-sticker text-white text-[10vw] leading-none whitespace-nowrap">FEVER!!</div>
+                  {cutin.sub && <div className="hx-sticker text-neon-yellow text-3xl md:text-6xl whitespace-nowrap">{cutin.sub}</div>}
+                </div>
+                <Rabidopa anim="fever" rainbow className="relative h-[42vh] aspect-[720/700] -mt-[8vh] shrink-0" />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* GREAT! / PERFECT!! の文字（ひかえめのときは 段階アップ / FEVER の帯もここ） */}
       <div className="fixed inset-0 z-[45] pointer-events-none overflow-hidden font-pop">
         {popups.map(p => p.kind === 'word' ? (
           <div key={p.id} className="absolute inset-x-0 top-[9vh] flex justify-center">
