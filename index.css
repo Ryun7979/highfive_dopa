@@ -591,6 +591,111 @@ body {
   to { transform: translate(3px, -2px) rotate(2deg); }
 }
 /* ==========================================================
+   ガチャの演出（docs/spec.md §9.1）：カプセルが落ちる → ゆれる → 色が上がる → 割れる
+   ========================================================== */
+.hx-capsule-drop {
+  transform-origin: 50% 100%;
+  animation: hx-capsule-drop 0.5s cubic-bezier(0.3, 0, 0.6, 1) backwards;
+}
+@keyframes hx-capsule-drop {
+  0% { transform: translateY(-260%) rotate(-40deg); }
+  55% { transform: translateY(0) rotate(0deg) scale(1.18, 0.78); }
+  75% { transform: translateY(-18%) rotate(6deg) scale(0.95, 1.05); }
+  100% { transform: translateY(0) rotate(0deg) scale(1); }
+}
+/* 色の段階が上がるほど、大きく速くゆれる */
+.hx-capsule-shake-0 { --amp: 4px; --rot: 5deg; animation: hx-capsule-shake 0.12s linear infinite alternate; }
+.hx-capsule-shake-1 { --amp: 7px; --rot: 8deg; animation: hx-capsule-shake 0.1s linear infinite alternate; }
+.hx-capsule-shake-2 { --amp: 10px; --rot: 11deg; animation: hx-capsule-shake 0.08s linear infinite alternate; }
+.hx-capsule-shake-3 { --amp: 14px; --rot: 14deg; animation: hx-capsule-shake 0.06s linear infinite alternate; }
+.hx-capsule-calm { --amp: 2px; --rot: 3deg; animation-duration: 0.16s; }
+@keyframes hx-capsule-shake {
+  from { transform: translate(calc(var(--amp) * -1), 2px) rotate(calc(var(--rot) * -1)); }
+  to { transform: translate(var(--amp), -2px) rotate(var(--rot)); }
+}
+.hx-capsule-up {
+  animation: hx-capsule-up 0.4s cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+@keyframes hx-capsule-up {
+  0% { transform: scale(0.8); filter: brightness(4); }
+  40% { transform: scale(1.45); filter: brightness(2); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
+.hx-capsule-glow-1 { box-shadow: 0 0 40px 8px var(--cyan); }
+.hx-capsule-glow-2 { box-shadow: 0 0 60px 14px var(--yellow); }
+.hx-capsule-up.hx-capsule-glow-3 {
+  animation: hx-capsule-up 0.4s cubic-bezier(0.2, 1.6, 0.4, 1), hx-capsule-rainbow 0.5s linear infinite;
+}
+@keyframes hx-capsule-rainbow {
+  0%, 100% { box-shadow: 0 0 80px 20px #FF2440; }
+  25% { box-shadow: 0 0 80px 20px #FFE600; }
+  50% { box-shadow: 0 0 80px 20px #00F0FF; }
+  75% { box-shadow: 0 0 80px 20px #FF2E93; }
+}
+/* 割れて飛んでいく上半分・下半分 */
+.hx-capsule-pop-top { animation: hx-capsule-pop-top 0.55s ease-out forwards; }
+.hx-capsule-pop-bottom { animation: hx-capsule-pop-bottom 0.55s ease-out forwards; }
+@keyframes hx-capsule-pop-top {
+  0% { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+  100% { transform: translate(-90%, -170%) rotate(-150deg); opacity: 0; }
+}
+@keyframes hx-capsule-pop-bottom {
+  0% { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+  100% { transform: translate(80%, 130%) rotate(130deg); opacity: 0; }
+}
+/* ステージのうしろで回る集中線。色は --ray */
+/* 回る四角の角がスクロール領域を広げないよう、丸い入れ物で切る */
+.hx-gacha-rays-box {
+  position: absolute;
+  inset: -40%;
+  border-radius: 50%;
+  overflow: hidden;
+  pointer-events: none;
+}
+.hx-gacha-rays {
+  position: absolute;
+  inset: 0;
+  opacity: 0.75;
+  background: repeating-conic-gradient(var(--ray, #fff) 0deg 7deg, transparent 7deg 20deg);
+  -webkit-mask-image: radial-gradient(circle, #000 20%, transparent 68%);
+  mask-image: radial-gradient(circle, #000 20%, transparent 68%);
+  animation: dopa-spin 5s linear infinite;
+}
+.hx-gacha-rays-rainbow {
+  opacity: 0.9;
+  background: repeating-conic-gradient(#FF2440 0deg 6deg, transparent 6deg 12deg, #FFE600 12deg 18deg, transparent 18deg 24deg, #00F0FF 24deg 30deg, transparent 30deg 36deg, #FF2E93 36deg 42deg, transparent 42deg 48deg);
+  animation-duration: 2.5s;
+}
+.hx-gacha-dim {
+  background: rgba(11, 3, 32, 0.6);
+  animation: hx-gacha-dim 0.3s ease-out backwards;
+}
+@keyframes hx-gacha-dim {
+  from { opacity: 0; }
+}
+/* ことばがドンと出る */
+.hx-gacha-pop {
+  animation: hx-gacha-pop 0.3s cubic-bezier(0.2, 1.6, 0.4, 1) backwards;
+}
+@keyframes hx-gacha-pop {
+  0% { transform: scale(2.6) rotate(-10deg); opacity: 0; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+/* NEW!! のスタンプ。アイテムが出てから少しおくれて叩きつける */
+.hx-gacha-stamp {
+  animation: hx-gacha-stamp 0.45s cubic-bezier(0.2, 1.6, 0.4, 1) 0.45s backwards;
+}
+@keyframes hx-gacha-stamp {
+  0% { transform: scale(4) rotate(-18deg); opacity: 0; }
+  60% { transform: scale(0.9) rotate(4deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+/* SSR のアイテムの枠：にじ色に光りつづける */
+.hx-gacha-ssr {
+  animation: hx-fever-frame 0.6s linear infinite;
+}
+
+/* ==========================================================
    もっと派手に：打鍵の手応え・節目のカットイン・常時のにぎやかさ
    ========================================================== */
 

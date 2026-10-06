@@ -732,6 +732,72 @@ class AudioManager {
     });
   }
 
+  // ガチャ：カプセルが落ちてくる音
+  public playGachaDrop() {
+    const ctx = this.ready();
+    if (!ctx) return;
+    this.boosted(1.6, 0.4, () => {
+      const t = ctx.currentTime;
+      this.tone(900, t, 0.3, 'triangle', 0.25, 160);
+      this.tone(170, t + 0.3, 0.3, 'sine', 0.9, 45);
+      this.noise(t + 0.3, 0.25, 0.5, 'lowpass', 900);
+      this.tone(140, t + 0.47, 0.15, 'sine', 0.4, 60);
+    });
+  }
+
+  // ガチャ：カプセルがガタガタゆれる音（dur 秒）。だんだん速く、tier が上がるほど高くなる。
+  // 途中で飛ばせるように、止める関数を返す
+  public playGachaRattle(dur: number, tier: number): () => void {
+    const ctx = this.ready();
+    if (!ctx || !this.masterGain) return () => {};
+    const out = ctx.createGain();
+    out.gain.value = 2.4;
+    out.connect(this.masterGain);
+    const t = ctx.currentTime;
+    let s = 0;
+    while (s < dur) {
+      const p = s / dur;
+      this.noise(t + s, 0.045, 0.25 + 0.35 * p, 'bandpass', 1400 + tier * 700 + 900 * p, out);
+      this.tone(this.midi(48 + tier * 5) * (1 + 0.5 * p), t + s, 0.04, 'square', 0.05, undefined, out);
+      s += 0.075 - 0.04 * p;
+    }
+    return () => {
+      const now = ctx.currentTime;
+      out.gain.cancelScheduledValues(now);
+      out.gain.setValueAtTime(out.gain.value, now);
+      out.gain.linearRampToValueAtTime(0, now + 0.03);
+    };
+  }
+
+  // ガチャ：カプセルの色が1段上がる音。tier（1〜3）が上がるほど高く、音が増える
+  public playGachaUp(tier: number) {
+    const ctx = this.ready();
+    if (!ctx) return;
+    this.boosted(1.8, 0.5, () => {
+      const t = ctx.currentTime;
+      const base = 67 + tier * 5;
+      this.tone(this.midi(base - 12), t, 0.16, 'sawtooth', 0.2, this.midi(base + 12));
+      [0, 4, 7, 12, 16, 19].slice(0, tier * 2).forEach((n, i) => {
+        this.tone(this.midi(base + n), t + 0.1 + i * 0.035, 0.45, 'square', 0.12);
+        this.tone(this.midi(base + n + 12), t + 0.1 + i * 0.035, 0.45, 'triangle', 0.16);
+      });
+      this.noise(t + 0.1, 0.3 + tier * 0.1, 0.3, 'highpass', 6000);
+      this.punch(t + 0.1, 0.2 + tier * 0.08);
+    });
+  }
+
+  // ガチャ：カプセルが割れる音
+  public playGachaOpen() {
+    const ctx = this.ready();
+    if (!ctx) return;
+    this.boosted(1.6, 0, () => {
+      const t = ctx.currentTime;
+      this.noise(t, 0.18, 0.7, 'bandpass', 2500, undefined, 9000);
+      this.tone(500, t, 0.12, 'square', 0.25, 2200);
+      this.punch(t, 0.4);
+    });
+  }
+
   // ランクのスタンプが叩きつけられる音。big はランク S 以上
   public playRankSlam(big: boolean) {
     const ctx = this.ready();
