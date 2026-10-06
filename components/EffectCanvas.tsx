@@ -1,5 +1,5 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { getEquipped, getItem } from '../utils/items';
+import { ITEMS, getEquipped, getItem } from '../utils/items';
 
 export const RAINBOW = ['#FF1744', '#FF9100', '#FFD600', '#00E676', '#00E5FF', '#2962FF', '#D500F9', '#F50057'];
 
@@ -18,14 +18,30 @@ interface EffectCanvasProps {
   effect?: string;       // 打鍵エフェクトのアイテム ID。省くと、いま装備しているもの
 }
 
-type Kind = 'dot' | 'star' | 'char' | 'conf' | 'ring';
+type Kind = 'dot' | 'star' | 'char' | 'conf' | 'ring' | 'img';
 interface Particle {
   kind: Kind; x: number; y: number; vx: number; vy: number; g: number;
-  life: number; max: number; size: number; color: string; rot: number; vr: number; ch?: string;
+  life: number; max: number; size: number; color: string; rot: number; vr: number; ch?: string; img?: HTMLImageElement;
 }
 
 const pick = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
+
+// エフェクトの絵（1種につき4枚。docs/assets.md）。読みこめた絵だけを配列に入れる
+const SPRITES_PER_EFFECT = 4;
+const spriteCache = new Map<string, HTMLImageElement[]>();
+const loadSprites = (name: string): HTMLImageElement[] => {
+  let list = spriteCache.get(name);
+  if (list) return list;
+  list = [];
+  spriteCache.set(name, list);
+  for (let n = 1; n <= SPRITES_PER_EFFECT; n++) {
+    const img = new Image();
+    img.onload = () => list!.push(img);
+    img.src = `/assets/images/fx/fx_${name}_${n}.webp`;
+  }
+  return list;
+};
 
 const drawStar = (ctx: CanvasRenderingContext2D, r: number) => {
   ctx.beginPath();
@@ -47,7 +63,15 @@ const EffectCanvas = forwardRef<EffectHandle, EffectCanvasProps>(({ maxParticles
   // パーティクルの色表は装備中のエフェクトで決まる
   const [equipped] = useState(() => getEquipped('effect'));
   const colorsRef = useRef<string[]>(RAINBOW);
-  colorsRef.current = ((effect && getItem(effect)) || equipped).colors ?? RAINBOW;
+  const item = (effect && getItem(effect)) || equipped;
+  colorsRef.current = item.colors ?? RAINBOW;
+  // 絵がまだ読みこめていない・読みこめなかったときは空のままで、丸と星を描く
+  const spritesRef = useRef<HTMLImageElement[]>([]);
+  spritesRef.current = item.sprite ? loadSprites(item.sprite) : [];
+  // その場で切り替える画面（図鑑）では、切り替えた直後から絵で出せるように全種を先に読みこむ
+  useEffect(() => {
+    if (effect) ITEMS.forEach(i => i.sprite && loadSprites(i.sprite));
+  }, []);
   maxRef.current = maxParticles;
   ambientRef.current = ambient;
 
@@ -63,6 +87,12 @@ const EffectCanvas = forwardRef<EffectHandle, EffectCanvasProps>(({ maxParticles
         const a = Math.random() * Math.PI * 2;
         const sp = rand(200, 900) * power;
         const max = rand(0.35, 0.8);
+        const sprites = spritesRef.current;
+        if (sprites.length && Math.random() < 0.5) {
+          push({ kind: 'img', img: pick(sprites), x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 200, g: 1400,
+            life: max, max, size: rand(22, 44) * Math.min(1.6, power), color: '', rot: rand(-0.6, 0.6), vr: rand(-6, 6) });
+          continue;
+        }
         push({ kind: Math.random() < 0.4 ? 'star' : 'dot', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 200, g: 1400,
           life: max, max, size: rand(6, 18) * Math.min(1.6, power), color: pick(colorsRef.current), rot: rand(0, 6), vr: rand(-10, 10) });
       }
@@ -128,6 +158,12 @@ const EffectCanvas = forwardRef<EffectHandle, EffectCanvasProps>(({ maxParticles
       while (ambientAcc >= 1) {
         ambientAcc -= 1;
         const max = rand(1.2, 2.4);
+        const sprites = spritesRef.current;
+        if (sprites.length) {
+          push({ kind: 'img', img: pick(sprites), x: rand(0, W), y: H + 20, vx: rand(-40, 40), vy: rand(-520, -220), g: 0, life: max, max,
+            size: rand(24, 48), color: '', rot: rand(-0.5, 0.5), vr: rand(-2, 2) });
+          continue;
+        }
         push({ kind: 'star', x: rand(0, W), y: H + 20, vx: rand(-40, 40), vy: rand(-520, -220), g: 0, life: max, max,
           size: rand(8, 20), color: pick(colorsRef.current), rot: rand(0, 6), vr: rand(-4, 4) });
       }
@@ -171,6 +207,12 @@ const EffectCanvas = forwardRef<EffectHandle, EffectCanvasProps>(({ maxParticles
           ctx.scale(1, Math.cos(p.rot * 1.7)); // ひらひら
           ctx.fillStyle = p.color;
           ctx.fillRect(-p.size / 2, -p.size / 3, p.size, p.size / 1.5);
+        } else if (p.kind === 'img' && p.img) {
+          ctx.rotate(p.rot);
+          // 縦長・横長の絵でも、長いほうの辺が size になるようにそろえる
+          const s = p.size * (0.5 + k * 0.5) / Math.max(p.img.naturalWidth, p.img.naturalHeight);
+          const w = p.img.naturalWidth * s, h = p.img.naturalHeight * s;
+          ctx.drawImage(p.img, -w / 2, -h / 2, w, h);
         } else if (p.kind === 'star') {
           ctx.rotate(p.rot);
           drawStar(ctx, p.size * (0.5 + k * 0.5));

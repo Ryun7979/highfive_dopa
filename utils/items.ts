@@ -3,7 +3,7 @@ import { PALETTE, Palette } from './rabidopaRig';
 import { SaveData, loadSave, mutateSave } from './saveData';
 
 // ガチャで集めるアイテム（docs/spec.md §9.1）。4カテゴリ × 6種。
-// はいけいは絵の素材（docs/assets.md）、ほかはコードだけで作ってある。素材ができたら、ここの定義に足す・差し替える。
+// はいけいとエフェクトは絵の素材（docs/assets.md）、ほかはコードだけで作ってある。素材ができたら、ここの定義に足す・差し替える。
 
 export type ItemCategory = 'costume' | 'effect' | 'sound' | 'bg';
 export type Rarity = 'N' | 'R' | 'SR' | 'SSR';
@@ -16,6 +16,7 @@ export interface ItemDef {
   palette?: Palette;   // costume: ラビッドパの色
   rainbow?: boolean;   // costume: 色がぐるぐる変わる
   colors?: string[];   // effect: パーティクルの色表
+  sprite?: string;     // effect: パーティクルの絵（public/assets/images/fx/fx_<名前>_1〜4.webp。docs/assets.md）
   voice?: TypeVoice;   // sound: 打鍵音の音色
   tint?: string;       // sound: 図鑑のアイコンの色
   bgImage?: string;    // bg: 背景に敷く絵（public/assets/images/bg/。docs/assets.md）
@@ -41,12 +42,12 @@ export const ITEMS: ItemDef[] = [
   { id: 'costume_night', category: 'costume', rarity: 'SR', label: 'くろうさぎ', palette: { main: '#4A3A8C', shade: '#352869', light: '#8CFBFF', line: '#12082E', cheek: '#FF2E93', nose: '#FFE600' } },
   { id: 'costume_rainbow', category: 'costume', rarity: 'SSR', label: 'にじいろ', rainbow: true, palette: { main: '#FF8FC0', shade: '#FF5FA2', light: '#FFF1B8', line: '#6A1B9A', cheek: '#FF4081', nose: '#FF6D00' } },
 
-  { id: 'effect_star', category: 'effect', rarity: 'N', label: 'にじスター', colors: ['#FF1744', '#FF9100', '#FFD600', '#00E676', '#00E5FF', '#2962FF', '#D500F9', '#F50057'] },
-  { id: 'effect_fire', category: 'effect', rarity: 'N', label: 'ほのお', colors: ['#FF1744', '#FF3D00', '#FF9100', '#FFC400', '#FFEA00', '#FFFFFF'] },
-  { id: 'effect_ice', category: 'effect', rarity: 'N', label: 'こおり', colors: ['#E0F7FA', '#80DEEA', '#00E5FF', '#40C4FF', '#2979FF', '#FFFFFF'] },
-  { id: 'effect_candy', category: 'effect', rarity: 'R', label: 'キャンディ', colors: ['#FF9ECF', '#FFD59E', '#FFF59D', '#B9F6CA', '#A7E8FF', '#D1B3FF'] },
-  { id: 'effect_gold', category: 'effect', rarity: 'SR', label: 'ゴールド', colors: ['#FFD700', '#FFC400', '#FFE57F', '#FFF8E1', '#FFAB00', '#FFFFFF'] },
-  { id: 'effect_galaxy', category: 'effect', rarity: 'SSR', label: 'ギャラクシー', colors: ['#D500F9', '#651FFF', '#00E5FF', '#FF2E93', '#B388FF', '#FFFFFF', '#FFE600'] },
+  { id: 'effect_star', category: 'effect', rarity: 'N', label: 'にじスター', sprite: 'star', colors: ['#FF1744', '#FF9100', '#FFD600', '#00E676', '#00E5FF', '#2962FF', '#D500F9', '#F50057'] },
+  { id: 'effect_fire', category: 'effect', rarity: 'N', label: 'ほのお', sprite: 'fire', colors: ['#FF1744', '#FF3D00', '#FF9100', '#FFC400', '#FFEA00', '#FFFFFF'] },
+  { id: 'effect_ice', category: 'effect', rarity: 'N', label: 'こおり', sprite: 'ice', colors: ['#E0F7FA', '#80DEEA', '#00E5FF', '#40C4FF', '#2979FF', '#FFFFFF'] },
+  { id: 'effect_candy', category: 'effect', rarity: 'R', label: 'キャンディ', sprite: 'candy', colors: ['#FF9ECF', '#FFD59E', '#FFF59D', '#B9F6CA', '#A7E8FF', '#D1B3FF'] },
+  { id: 'effect_gold', category: 'effect', rarity: 'SR', label: 'ゴールド', sprite: 'gold', colors: ['#FFD700', '#FFC400', '#FFE57F', '#FFF8E1', '#FFAB00', '#FFFFFF'] },
+  { id: 'effect_galaxy', category: 'effect', rarity: 'SSR', label: 'ギャラクシー', sprite: 'galaxy', colors: ['#D500F9', '#651FFF', '#00E5FF', '#FF2E93', '#B388FF', '#FFFFFF', '#FFE600'] },
 
   { id: 'sound_pop', category: 'sound', tint: '#00F0FF', rarity: 'N', label: 'ポップ', voice: { main: 'triangle', over: 'square', overShift: 12, dur: 0.16 } },
   { id: 'sound_piko', category: 'sound', tint: '#B6FF00', rarity: 'N', label: 'ピコピコ', voice: { main: 'square', over: 'square', overShift: 12, dur: 0.09, mainVol: 0.3 } },
