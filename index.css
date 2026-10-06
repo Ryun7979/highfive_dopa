@@ -518,14 +518,16 @@ body {
 /* ==========================================================
    タイトル・リザルト
    ========================================================== */
-.dopa-title-char {
-  display: inline-block;
-  animation: dopa-title-char 0.9s ease-in-out infinite;
+/* タイトルロゴ（絵。docs/assets.md）。はずむように揺らす */
+.dopa-title-logo {
+  filter: drop-shadow(8px 10px 0 rgba(11, 3, 32, 0.55));
+  animation: dopa-title-logo 0.9s ease-in-out infinite;
 }
-@keyframes dopa-title-char {
-  0%, 100% { transform: translateY(0) rotate(var(--r, -5deg)) scale(1); }
-  50% { transform: translateY(-16px) rotate(calc(var(--r, -5deg) * -1)) scale(1.12); }
+@keyframes dopa-title-logo {
+  0%, 100% { transform: translateY(0) rotate(-2deg) scale(1); }
+  50% { transform: translateY(-10px) rotate(2deg) scale(1.06); }
 }
+.dopa-calm-logo { animation: none; }
 .dopa-rainbow-fill {
   background: linear-gradient(90deg, #FF2440, #FF7A00, #FFE600, #B6FF00, #00F0FF, #8B2BFF, #FF2E93, #FF2440);
   background-size: 200% 100%;

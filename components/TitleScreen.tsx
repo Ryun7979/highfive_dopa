@@ -24,16 +24,6 @@ interface TitleScreenProps {
   onOpenCollection: () => void;
 }
 
-// ロゴ「はちゃめちゃ」。1文字ずつ色と傾きを変えて暴れさせる
-const LOGO_CHARS = [
-  { ch: 'は', color: 'text-neon-pink', rot: '-8deg' },
-  { ch: 'ち', color: 'text-neon-yellow', rot: '6deg' },
-  { ch: 'ゃ', color: 'text-neon-cyan', rot: '-4deg' },
-  { ch: 'め', color: 'text-neon-lime', rot: '7deg' },
-  { ch: 'ち', color: 'text-neon-orange', rot: '-6deg' },
-  { ch: 'ゃ', color: 'text-white', rot: '5deg' },
-];
-
 const TICKER = 'コンボを つなげ！ ★ FEVER を ねらえ！ ★ ノーミスで PERFECT!! ★ うてば うつほど きもちいい！ ★ めざせ SSS ランク！ ★ ';
 
 const TitleScreen: React.FC<TitleScreenProps> = ({ initialMode = 'practice', effectLevel = 'max', onStart, onOpenSettings, onOpenOptions, onOpenSkillTree, onOpenGacha, onOpenCollection }) => {
@@ -168,28 +158,15 @@ const TitleScreen: React.FC<TitleScreenProps> = ({ initialMode = 'practice', eff
           {/* タイトルロゴ。両わきでラビッドパが騒ぐ */}
           <div className="pt-12 md:pt-8 flex items-end justify-center gap-0 md:gap-2">
             <Rabidopa ref={leftRef} anim={calm ? 'idle' : 'fever'} aura={calm ? 0 : 3} className="relative z-10 shrink-0 w-[110px] h-[107px] -mt-10 md:w-[190px] md:h-[185px] md:-mt-16" />
-            <h1 className="relative leading-none whitespace-nowrap">
-              <span className="block text-[3.2rem] md:text-[6.5rem] tracking-tight">
-                {LOGO_CHARS.map((c, i) => (
-                  <span
-                    key={i}
-                    className={`dopa-title-char hx-sticker ${c.color}`}
-                    style={{ animationDelay: `${i * 0.1}s`, '--r': c.rot } as React.CSSProperties}
-                  >
-                    {c.ch}
-                  </span>
-                ))}
-              </span>
-              <span className="relative inline-flex items-center -mt-2 md:-mt-4">
-                <span className="hx-skew inline-block dopa-rainbow-fill border-[5px] border-neon-ink rounded-2xl px-8 md:px-12 py-1 shadow-[8px_9px_0_#0B0320]">
-                  <span className="hx-unskew hx-sticker text-white text-4xl md:text-6xl tracking-[0.2em]">タイプ</span>
-                </span>
-                <span className="absolute -right-16 md:-right-24 -top-4 md:-top-6 w-16 h-16 md:w-24 md:h-24 flex items-center justify-center dopa-wiggle">
-                  <span className="absolute inset-0 hx-burst bg-neon-ink" />
-                  <span className="absolute inset-[5px] hx-burst bg-neon-yellow" />
-                  <span className="relative text-neon-ink text-lg md:text-3xl">!!</span>
-                </span>
-              </span>
+            <h1 className="relative shrink-0">
+              <img
+                src="/assets/images/ui/logo_title.webp"
+                alt="はちゃめちゃタイプ"
+                width={1400}
+                height={678}
+                draggable={false}
+                className={`dopa-title-logo ${calm ? 'dopa-calm-logo' : ''} block w-auto max-w-none h-[140px] -my-4 md:h-[280px] md:-mt-6 md:-mb-12 select-none`}
+              />
             </h1>
             <Rabidopa ref={rightRef} anim={calm ? 'idle' : 'shout'} aura={calm ? 0 : 2} className="relative z-10 shrink-0 w-[110px] h-[107px] -mt-10 md:w-[190px] md:h-[185px] md:-mt-16" />
           </div>
