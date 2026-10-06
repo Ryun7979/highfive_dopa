@@ -4,9 +4,8 @@ import App from './App';
 
 // フォントは同梱（オフライン動作のため CDN を使わない）
 import '@fontsource/mochiy-pop-one/400.css';
+// まるゴシックは出題文字（900）と見本（400）でしか使わないので、その2つだけ入れる
 import '@fontsource/zen-maru-gothic/400.css';
-import '@fontsource/zen-maru-gothic/500.css';
-import '@fontsource/zen-maru-gothic/700.css';
 import '@fontsource/zen-maru-gothic/900.css';
 import '@fontsource/noto-sans-jp/400.css';
 import '@fontsource/noto-sans-jp/700.css';
