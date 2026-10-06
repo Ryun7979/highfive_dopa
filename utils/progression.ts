@@ -13,8 +13,8 @@ export const expToNext = (level: number): number => 100 + 35 * (level - 1);
 
 export const calcExp = (score: number): number => Math.floor(score / 10);
 
-// コインはスコア ÷ 100。ボーナスタイム中にかせいだ分は ×2 で数える
-export const calcCoins = (stats: GameStats): number => Math.floor((stats.score + stats.bonusScore) / 100);
+// コインはごほうび用スコア ÷ 100。ボーナスタイム中にかせいだ分は ×2 で数える
+export const calcCoins = (stats: GameStats): number => Math.floor((stats.rewardScore + stats.bonusScore) / 100);
 
 // EXP を足してレベルを上げる。上がった回数だけ SP がもらえる
 export const addExp = (player: PlayerData, exp: number): number => {
@@ -41,7 +41,7 @@ export interface PlayRewards {
 }
 
 export const grantPlayRewards = (stats: GameStats): PlayRewards => {
-  const exp = calcExp(stats.score) + PLAY_BONUS_EXP;
+  const exp = calcExp(stats.rewardScore) + PLAY_BONUS_EXP;
   const coins = calcCoins(stats) + PLAY_BONUS_COINS;
   let rewards: PlayRewards = { coins, coinsAfter: coins, exp, levelBefore: 1, levelAfter: 1, expAfter: 0, spGain: 0 };
   mutateSave(data => {

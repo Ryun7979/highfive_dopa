@@ -7,7 +7,8 @@ import { parseKanaToMora, Mora } from '../utils/romajiUtils';
 import { audioManager } from '../utils/audioManager';
 import { FontType } from '../utils/settingsManager';
 import { EffectLevel, TextSize } from '../utils/saveData';
-import { ARCADE_SECONDS, AWAKEN_COMBO, COMBO_CUTIN_EVERY, FEVER_MAX, GAUGE_PER_KEY, GAUGE_PER_WORD, HINT_IDLE_MS, HINT_MISS_COUNT, LUCKY_RATE, getComboTier, keyScore, wordScore } from '../utils/gameRules';
+import { GaugeFxKind, playGaugeFx } from '../utils/gaugeFx';
+import { ARCADE_SECONDS, AWAKEN_COMBO, COMBO_CUTIN_EVERY, FEVER_GAIN_PER_KEY, FEVER_GAIN_PER_WORD, FEVER_LEVEL_MAX, FEVER_LOW, FEVER_MAX, FEVER_MISS_PENALTY, GAUGE_KEEP_ON_MISS, GAUGE_PER_KEY, GAUGE_PER_WORD, HINT_IDLE_MS, HINT_MISS_COUNT, LUCKY_RATE, REWARD_FEVER_LEVEL, feverDrainPerSec, feverMult, getComboTier, getFeverLevel, keyScore, wordScore } from '../utils/gameRules';
 import { DEFAULT_MODS, GameMods } from '../utils/skills';
 import { createHoldTimer } from '../utils/holdTimer';
 import EffectCanvas, { EffectHandle, RAINBOW } from './EffectCanvas';
@@ -85,20 +86,25 @@ const COUNT_COLOR: Record<3 | 2 | 1, string> = { 3: '#00F0FF', 2: '#FFE600', 1: 
 const EDGE_WIDTH = ['4px', '6px', '8px', '10px', '14px'];
 
 // カットイン：○コンボの節目（上の帯）／段階アップ（ラビッドパが中央へ飛び出す）／FEVER 突入（中央の大帯）
-// ／ボーナスタイム突入（金の帯）／100コンボの覚醒（スキル）
+// ／FEVER の段階アップ（上の虹の帯）／ボーナスタイム突入（金の帯）／100コンボの覚醒（スキル）
 interface CutIn {
   id: number;
-  type: 'combo' | 'tier' | 'fever' | 'bonus' | 'awaken';
+  type: 'combo' | 'tier' | 'fever' | 'feverup' | 'bonus' | 'awaken';
   text: string;
   sub?: string;
 }
-const CUTIN_RANK: Record<CutIn['type'], number> = { combo: 1, tier: 2, fever: 3, bonus: 3, awaken: 4 };
-const CUTIN_MS: Record<CutIn['type'], number> = { combo: 1000, tier: 1200, fever: 2400, bonus: 1400, awaken: 1800 };
+const CUTIN_RANK: Record<CutIn['type'], number> = { combo: 1, tier: 2, fever: 3, feverup: 3, bonus: 3, awaken: 4 };
+const CUTIN_MS: Record<CutIn['type'], number> = { combo: 1000, tier: 1200, fever: 2400, feverup: 1000, bonus: 1400, awaken: 1800 };
 // 出題が隠れるカットイン。出ているあいだはゲームの時間を止め、次の問題へ進めない
-const CUTIN_HIDES: Record<CutIn['type'], boolean> = { combo: false, tier: true, fever: true, bonus: true, awaken: true };
+const CUTIN_HIDES: Record<CutIn['type'], boolean> = { combo: false, tier: true, fever: true, feverup: false, bonus: true, awaken: true };
 
-const FEVER_LAST_MS = 3000;     // FEVER の終わりぎわ（ゲージと枠がいそがしくなる）
-const FEVER_FIREWORK_MS = 600;  // FEVER 中、左右のふちから花火が上がる間隔
+// FEVER の段階（1〜4）ごとの派手さ。段階が上がるたびに倍々で増える
+const FEVER_FIREWORK_MS = [600, 300, 150, 100];   // 左右のふちから花火が上がる間隔
+const FEVER_KEY_PARTICLES = [2.2, 3, 4, 5];       // 打鍵ごとのパーティクルの倍率
+const FEVER_AMBIENT = [70, 120, 170, 220];        // 下からわくキラキラ（1秒あたり）
+const FEVER_EDGE_WIDTH = ['18px', '24px', '30px', '38px'];
+const FEVER_EDGE_SPEED = ['0.5s', '0.35s', '0.25s', '0.16s'];
+const FEVER_TICK_MS = 50;                         // ゲージを減らす間隔
 const FEVER_TICKER = Array.from({ length: 14 }, () => 'FEVER!!').join(' ★ ');
 
 interface Popup {
@@ -125,6 +131,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
   // 画面に出す値。正本は gameRef（キー入力の中ですぐ読み書きするため）
   const [hud, setHud] = useState({ score: 0, combo: 0, gauge: 0, words: 0 });
   const [isFever, setIsFever] = useState(false);
+  const [feverLevel, setFeverLevel] = useState(0); // FEVER の段階。0 は FEVER ではない
   const [started, setStarted] = useState(false);
   const [counting, setCounting] = useState(false); // 開始カウントダウンの表示中
   const phaseRef = useRef<'wait' | 'count' | 'play'>('wait');
@@ -142,12 +149,15 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
   const gameRef = useRef({
     correct: 0, missed: 0, score: 0, combo: 0, maxCombo: 0, gauge: 0,
     words: 0, perfects: 0, feverCount: 0, fever: false,
+    feverLevel: 0, feverKeys: 0, feverMaxLevel: 0, rewardScore: 0,
     wordMiss: false, wordStart: 0, wordKeys: 0, finished: false,
     golden: false, bonus: false, bonusScore: 0, goldenCleared: 0, trace: [] as number[],
   });
-  // FEVER とボーナスの残り時間。出題が隠れるカットインのあいだは止まる
-  const [timers] = useState(() => ({ fever: createHoldTimer(), feverLast: createHoldTimer(), bonus: createHoldTimer() }));
-  const [feverLast, setFeverLast] = useState(false);
+  // ボーナスの残り時間。出題が隠れるカットインのあいだは止まる（FEVER はゲージで数える）
+  const [timers] = useState(() => ({ bonus: createHoldTimer() }));
+  const [feverLow, setFeverLow] = useState(false); // FEVER のゲージが残りわずか
+  const gaugeBarRef = useRef<HTMLDivElement>(null);
+  const gaugeWrapRef = useRef<HTMLDivElement>(null);
   // 出題が隠れるカットインが出た時刻。0 なら動いている。正本は ref（キー入力の中ですぐ読むため）
   const pausedAtRef = useRef(0);
   const [pausedAt, setPausedAt] = useState(0);
@@ -156,7 +166,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
   const fxTimersRef = useRef<number[]>([]);
   const popupIdRef = useRef(0);
   const [cutin, setCutin] = useState<CutIn | null>(null);
-  const [ghost, setGhost] = useState<{ id: number; n: number } | null>(null);
+  const [ghost, setGhost] = useState<{ id: number; n: number | string } | null>(null);
   const cutinTimerRef = useRef<number | null>(null);
   const cutinRankRef = useRef(0);
   const kanaRef = useRef<HTMLDivElement>(null);
@@ -187,8 +197,6 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
     if (pausedAtRef.current !== 0) return;
     pausedAtRef.current = Date.now();
     setPausedAt(pausedAtRef.current);
-    timers.fever.hold();
-    timers.feverLast.hold();
     timers.bonus.hold();
   }, [timers]);
 
@@ -201,8 +209,6 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
     startTimeRef.current += stopped;
     gameRef.current.wordStart += stopped;
     lastInputTimeRef.current = Date.now();
-    timers.fever.release();
-    timers.feverLast.release();
     timers.bonus.release();
     if (pendingNextRef.current) {
       pendingNextRef.current = false;
@@ -234,7 +240,9 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
     }
     cutinRankRef.current = rank;
     setCutin({ ...c, id: ++popupIdRef.current });
+    // 出題を隠さないカットインが、隠すカットインを上書きしたときは、そこで再開する
     if (CUTIN_HIDES[c.type]) pauseGame();
+    else resumeGame();
     cutinTimerRef.current = window.setTimeout(() => {
       cutinTimerRef.current = null;
       cutinRankRef.current = 0;
@@ -276,13 +284,34 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
     el.classList.add('dopa-invert');
   }, [fxScale]);
 
+  // FEVER 中のゲージの長さ。50ms ごとに変わるので、React を通さず直接書く
+  const paintFeverGauge = useCallback(() => {
+    const g = gameRef.current;
+    if (gaugeBarRef.current) gaugeBarRef.current.style.width = `${Math.max(0, Math.min(100, (g.gauge / FEVER_MAX) * 100))}%`;
+    setFeverLow(g.fever && g.gauge < FEVER_LOW);
+  }, []);
+
+  // ゲージが増えた・減ったときの見た目（数字がとび出す、ふくらむ、ゆれる）。数値や進み方には触れない。
+  // from は減る前のゲージ。満タンからさらに増えたとき（max）は、枠ごと外へ広がって星がとぶ
+  const gaugeFx = useCallback((kind: GaugeFxKind, label: string, opts: { from?: number; big?: boolean } = {}) => {
+    const wrap = gaugeWrapRef.current;
+    const pct = (gameRef.current.gauge / FEVER_MAX) * 100;
+    playGaugeFx(wrap, kind, { label, pct, fromPct: opts.from === undefined ? undefined : (opts.from / FEVER_MAX) * 100, big: opts.big, calm });
+    if (kind === 'max' && !calm && wrap) {
+      const r = wrap.getBoundingClientRect();
+      fxRef.current?.burst(r.right, r.top + r.height / 2, opts.big ? 10 : 5, 0.9);
+    }
+  }, [calm]);
+
   const endFever = useCallback(() => {
     const g = gameRef.current;
-    timers.feverLast.clear();
     g.fever = false;
+    g.feverLevel = 0;
+    g.feverKeys = 0;
     g.gauge = 0;
     setIsFever(false);
-    setFeverLast(false);
+    setFeverLevel(0);
+    setFeverLow(false);
     audioManager.setBgmRate(1);
     audioManager.playFeverEnd();
     // おわりにもう一度はじける
@@ -296,7 +325,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
       shake(14, 300);
     }
     syncHud();
-  }, [syncHud, timers, calm, fxScale, shake]);
+  }, [syncHud, calm, fxScale, shake]);
 
   // FEVER 突入の演出。カットイン（2.4秒）の進みに合わせて、時間差で出す
   const feverIntro = useCallback(() => {
@@ -338,9 +367,15 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
 
   const startFever = useCallback(() => {
     const g = gameRef.current;
+    // ゲージは満タンから。時間で減り、打つと回復し、ミスで減る。空になったら終わる
     g.fever = true;
+    g.feverLevel = 1;
+    g.feverKeys = 0;
+    g.feverMaxLevel = Math.max(g.feverMaxLevel, 1);
+    g.gauge = FEVER_MAX;
     g.feverCount += 1;
     setIsFever(true);
+    setFeverLevel(1);
     audioManager.playFeverStart();
     audioManager.setBgmRate(2);
     // ボーナスタイムと重なったら「W ボーナス」
@@ -355,17 +390,44 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
     }
     if (fxScale > 0) fxRef.current?.flash('#FFFFFF', 0.8 * fxScale);
     shake(26, 500);
-    // カットインで止まっているあいだは数えない（消えてから 10秒まるごと使える）
-    const ms = mods.feverSeconds * 1000;
-    timers.fever.start(ms, endFever);
-    timers.feverLast.start(Math.max(0, ms - FEVER_LAST_MS), () => setFeverLast(true));
-  }, [showCutin, calm, endFever, feverIntro, fxScale, shake, timers, mods.feverSeconds]);
+  }, [showCutin, calm, feverIntro, fxScale, shake]);
 
-  // スコアを足す。ボーナスタイム中の分は別に数えておく（コインが ×2 になる）
-  const addScore = useCallback((points: number) => {
+  // FEVER の段階アップ（ばい → ばいばい → ばいばいばい）。出題は隠さず、ゲームも止めない
+  const feverUp = useCallback(() => {
+    const g = gameRef.current;
+    g.feverLevel += 1;
+    g.feverKeys = 0;
+    g.feverMaxLevel = Math.max(g.feverMaxLevel, g.feverLevel);
+    setFeverLevel(g.feverLevel);
+    const n = g.feverLevel;
+    const mult = feverMult(n) * (g.bonus ? 2 : 1);
+    audioManager.playFeverStart();
+    showCutin({ type: 'feverup', text: getFeverLevel(n).name, sub: `スコア ×${mult}` });
+    const fx = fxRef.current;
+    const W = window.innerWidth, H = window.innerHeight;
+    fx?.confetti(calm ? 30 : 60 * n);
+    for (let i = 0; i < (calm ? 2 : 2 * n); i++) fx?.firework();
+    if (!calm) {
+      // 倍率が画面いっぱいに出る（ふちどりだけなので出題は読める）
+      setGhost({ id: ++popupIdRef.current, n: `×${mult}` });
+      RAINBOW.slice(0, n + 2).forEach(color => fx?.ring(W / 2, H / 2, color));
+      fx?.burst(W / 2, H / 2, 30 * n, 1.6 + n * 0.2);
+      // 花火の連打。段階が上がるほど長く続く
+      for (let i = 0; i < 4 * n; i++) later(120 + i * 90, () => fxRef.current?.firework());
+      later(500, () => fxRef.current?.confetti(50 * n));
+      invertFlash();
+    }
+    if (fxScale > 0) fx?.flash('#FFFFFF', 0.7 * fxScale);
+    shake(14 + n * 6, 450);
+  }, [showCutin, calm, fxScale, invertFlash, later, shake]);
+
+  // スコアを足す。reward はコインと EXP の計算に使う点（FEVER の倍々の分をのぞく）。
+  // ボーナスタイム中の分は別に数えておく（コインが ×2 になる）
+  const addScore = useCallback((points: number, reward: number = points) => {
     const g = gameRef.current;
     g.score += points;
-    if (g.bonus) g.bonusScore += points;
+    g.rewardScore += reward;
+    if (g.bonus) g.bonusScore += reward;
   }, []);
 
   const endBonus = useCallback(() => {
@@ -382,7 +444,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
     setBonusId(n => n + 1);
     audioManager.playBonusStart(g.fever);
     showCutin(g.fever
-      ? { type: 'bonus', text: 'W ボーナス!!', sub: 'スコア ×4' }
+      ? { type: 'bonus', text: 'W ボーナス!!', sub: `スコア ×${feverMult(g.feverLevel) * 2}` }
       : { type: 'bonus', text: 'ボーナスタイム!!', sub: 'スコア・コイン ×2' });
     fxRef.current?.confetti(calm ? 30 : 100);
     fxRef.current?.firework();
@@ -400,7 +462,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
     g.combo += 1;
     g.maxCombo = Math.max(g.maxCombo, g.combo);
     const tier = getComboTier(g.combo);
-    addScore(keyScore(g.combo, g.fever, g.bonus));
+    addScore(keyScore(g.combo, g.feverLevel, g.bonus), keyScore(g.combo, Math.min(g.feverLevel, REWARD_FEVER_LEVEL), g.bonus));
 
     audioManager.playTypeNote(g.combo);
     rabbitRef.current?.play('type');
@@ -410,17 +472,19 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
     const x = rect ? rect.left + rect.width / 2 : window.innerWidth / 2;
     const y = rect ? rect.top + rect.height / 2 : window.innerHeight / 2;
     if (fx) {
-      const count = PARTICLES_PER_KEY[tier.level] * (g.fever ? 2.2 : 1) * (calm ? 0.5 : 1);
-      fx.burst(x, y, Math.round(count), 0.8 + tier.level * 0.15);
+      const count = PARTICLES_PER_KEY[tier.level] * (g.fever ? FEVER_KEY_PARTICLES[g.feverLevel - 1] : 1) * (calm ? 0.5 : 1);
+      fx.burst(x, y, Math.round(count), 0.8 + tier.level * 0.15 + Math.max(0, g.feverLevel - 1) * 0.2);
       fx.flyChar(x, y, char.toUpperCase());
       if (tier.level >= 1 || g.fever) fx.ring(x, y);
       if (g.fever && !calm) fx.ring(x, y, '#FFFFFF');
+      // FEVER の段階が上がるほど、輪が重なる
+      if (!calm) for (let i = 1; i < g.feverLevel; i++) fx.ring(x, y, RAINBOW[(g.combo + i * 2) % RAINBOW.length]);
       if (fxScale > 0) {
         const color = g.fever || tier.level >= 3 ? RAINBOW[g.combo % RAINBOW.length] : '#FFFFFF';
         fx.flash(color, (0.1 + tier.level * 0.03 + (g.fever ? 0.06 : 0)) * fxScale);
       }
     }
-    if (tier.level >= 2 || g.fever) shake(3 + tier.level * 3, 110);
+    if (tier.level >= 2 || g.fever) shake(3 + tier.level * 3 + Math.max(0, g.feverLevel - 1) * 3, 110);
     if (tier.level >= 3 || g.fever) zoomPulse(1.03 + (tier.level - 2) * 0.01);
 
     // 段階アップ
@@ -459,13 +523,22 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
     // 5コンボごとに、コンボ数が画面いっぱいに一瞬出る（ふちどりだけなので出題は読める）
     if (!calm && g.combo % 5 === 0) setGhost({ id: ++popupIdRef.current, n: g.combo });
 
-    // フィーバーゲージ
+    // フィーバーゲージ。FEVER 中は打つと回復し、打ちつづけると段階が上がる
+    // （出題が隠れているあいだはゲージが減らないので、回復も段階も数えない）
     if (!g.fever) {
       g.gauge = Math.min(FEVER_MAX, g.gauge + GAUGE_PER_KEY);
       if (g.gauge >= FEVER_MAX) startFever();
+      else gaugeFx('gain', `+${GAUGE_PER_KEY}`);
+    } else if (pausedAtRef.current === 0) {
+      const over = g.gauge + FEVER_GAIN_PER_KEY >= FEVER_MAX;
+      g.gauge = Math.min(FEVER_MAX, g.gauge + FEVER_GAIN_PER_KEY);
+      gaugeFx(over ? 'max' : 'gain', over ? 'MAX!!' : `+${FEVER_GAIN_PER_KEY}`);
+      g.feverKeys += 1;
+      if (g.feverLevel < FEVER_LEVEL_MAX && g.feverKeys >= getFeverLevel(g.feverLevel).keys) feverUp();
+      paintFeverGauge();
     }
     syncHud();
-  }, [addScore, showCutin, calm, fxScale, shake, startFever, syncHud, zoomPulse, mods.awaken]);
+  }, [addScore, showCutin, calm, fxScale, shake, startFever, feverUp, gaugeFx, paintFeverGauge, syncHud, zoomPulse, mods.awaken]);
 
   // 次の文字ヒントを更新
   const updateHintKey = useCallback((currentMoras: Mora[], moraIdx: number, currentInput: string) => {
@@ -568,15 +641,31 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
 
   useEffect(() => {
     return () => {
-      timers.fever.clear();
-      timers.feverLast.clear();
       timers.bonus.clear();
       fxTimersRef.current.forEach(id => clearTimeout(id));
       if (cutinTimerRef.current !== null) clearTimeout(cutinTimerRef.current);
     };
   }, [timers]);
 
-  // FEVER 中は、左右のふちから花火と紙ふぶきが上がりつづける
+  // FEVER 中のゲージは時間で減る。空になったら FEVER が終わる。
+  // 出題が隠れるカットインのあいだは減らない
+  useEffect(() => {
+    if (!isFever) return;
+    let last = Date.now();
+    const interval = window.setInterval(() => {
+      const now = Date.now();
+      const dt = (now - last) / 1000;
+      last = now;
+      const g = gameRef.current;
+      if (!g.fever || g.finished || pausedAtRef.current !== 0) return;
+      g.gauge -= feverDrainPerSec(g.feverLevel, mods.feverSeconds) * dt;
+      if (g.gauge <= 0) endFever();
+      else paintFeverGauge();
+    }, FEVER_TICK_MS);
+    return () => clearInterval(interval);
+  }, [isFever, mods.feverSeconds, endFever, paintFeverGauge]);
+
+  // FEVER 中は、左右のふちから花火と紙ふぶきが上がりつづける。段階が上がるほど間隔がつまる
   useEffect(() => {
     if (!isFever || calm || pausedAt !== 0) return;
     let n = 0;
@@ -584,9 +673,9 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
       const side = n++ % 2 === 0 ? 0.04 : 0.86;
       fxRef.current?.firework(window.innerWidth * (side + Math.random() * 0.1), window.innerHeight * (0.12 + Math.random() * 0.7));
       fxRef.current?.confetti(10);
-    }, FEVER_FIREWORK_MS);
+    }, FEVER_FIREWORK_MS[Math.max(1, feverLevel) - 1]);
     return () => clearInterval(interval);
-  }, [isFever, calm, pausedAt]);
+  }, [isFever, feverLevel, calm, pausedAt]);
 
   // 1秒ごとのスコアを残す（次回のゴースト用）。ゴーストがいれば差を出す
   useEffect(() => {
@@ -618,8 +707,6 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
     const g = gameRef.current;
     if (g.finished) return;
     g.finished = true;
-    timers.fever.clear();
-    timers.feverLast.clear();
     timers.bonus.clear();
     audioManager.setBgmRate(1);
     audioManager.stopBgm();
@@ -635,6 +722,8 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
       wordsCleared: g.words,
       perfectWords: g.perfects,
       feverCount: g.feverCount,
+      feverMaxLevel: g.feverMaxLevel,
+      rewardScore: g.rewardScore,
       bonusScore: g.bonusScore,
       goldenCleared: g.goldenCleared,
       trace: [...g.trace, g.score],
@@ -726,13 +815,19 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
       g.goldenCleared += 1;
       startBonus();
     }
-    // 単語クリアでもゲージがたまる
+    // 単語クリアでもゲージがたまる（FEVER 中は回復する）
     if (!g.fever) {
       g.gauge = Math.min(FEVER_MAX, g.gauge + GAUGE_PER_WORD);
       if (g.gauge >= FEVER_MAX) startFever();
+      else gaugeFx('gain', `+${GAUGE_PER_WORD}`, { big: true });
+    } else if (pausedAtRef.current === 0) {
+      const over = g.gauge + FEVER_GAIN_PER_WORD >= FEVER_MAX;
+      g.gauge = Math.min(FEVER_MAX, g.gauge + FEVER_GAIN_PER_WORD);
+      gaugeFx(over ? 'max' : 'gain', over ? 'MAX!!' : `+${FEVER_GAIN_PER_WORD}`, { big: true });
+      paintFeverGauge();
     }
     syncHud();
-  }, [addPopup, addScore, calm, fxScale, invertFlash, shake, startBonus, startFever, syncHud, zoomPulse, mods.lucky]);
+  }, [addPopup, addScore, calm, fxScale, gaugeFx, invertFlash, paintFeverGauge, shake, startBonus, startFever, syncHud, zoomPulse, mods.lucky]);
 
   // モーラの進行
   const advanceMora = useCallback((nextInputForState: string, isLookaheadSkip: boolean = false) => {
@@ -768,7 +863,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
     }
   }, [currentMoraIndex, moras, nextWord, updateHintKey, registerWordClear]);
 
-  // ミス処理（やさしめ：コンボは 0、ゲージは半分残る。FEVER 中は FEVER が続く）
+  // ミス処理（やさしめ：コンボは 0、ゲージは 4分の3 残る。FEVER 中はゲージが少し減り、空になれば FEVER が終わる）
   const handleMiss = useCallback(() => {
     // 出題が隠れているあいだの打ちまちがいは、ミスに数えない
     if (pausedAtRef.current !== 0) return;
@@ -776,7 +871,18 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
     g.missed += 1;
     g.wordMiss = true;
     g.combo = 0;
-    if (!g.fever) g.gauge = Math.floor(g.gauge * mods.gaugeKeepOnMiss);
+    const before = g.gauge;
+    if (!g.fever) {
+      g.gauge = Math.floor(g.gauge * mods.gaugeKeepOnMiss);
+      if (before > g.gauge) gaugeFx('loss', `-${before - g.gauge}`, { from: before });
+    } else {
+      // スキル「ゲージまもり」は FEVER 中のペナルティも半分にする
+      const penalty = FEVER_MISS_PENALTY * (1 - mods.gaugeKeepOnMiss) / (1 - GAUGE_KEEP_ON_MISS);
+      g.gauge = Math.max(0, g.gauge - penalty);
+      gaugeFx('loss', `-${Math.round(penalty)}`, { from: before });
+      if (g.gauge <= 0) endFever();
+      else paintFeverGauge();
+    }
     audioManager.playCrash();
     rabbitRef.current?.play('miss');
     if (fxScale > 0) fxRef.current?.flash('#FF1744', 0.55 * fxScale);
@@ -787,7 +893,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
     setTimeout(() => setIsError(false), 200);
     missCountRef.current += 1;
     if (missCountRef.current >= HINT_MISS_COUNT) setShowHint(true);
-  }, [fxScale, shake, syncHud, mods.gaugeKeepOnMiss]);
+  }, [endFever, fxScale, gaugeFx, paintFeverGauge, shake, syncHud, mods.gaugeKeepOnMiss]);
 
   // キー入力ハンドラ
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -849,9 +955,11 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
   const rabbitAnim = isFever || tier.level >= 3 ? 'fever' : tier.level === 2 ? 'shout' : tier.level === 1 ? 'groove' : 'idle';
   const kanaSize = currentWord && currentWord.text.length > 9 ? KANA_SIZE[textSize].long : KANA_SIZE[textSize].short;
   const romajiKeys = moras.reduce((sum, m) => sum + (m.romaji[0]?.length ?? 1), 0);
-  const multiplier = tier.mult * (isFever ? 2 : 1) * (isBonus ? 2 : 1);
-  // FEVER 中の出題エリアの枠。虹色で鼓動し、終わりぎわは速くなる（拡大方向だけ。文字は小さくならない）
-  const feverFrame = calm ? 'dopa-rainbow-border' : feverLast ? 'hx-fever-frame hx-fever-hurry' : 'hx-fever-frame';
+  const feverBonusMult = feverMult(feverLevel) * (isBonus ? 2 : 1);
+  const multiplier = tier.mult * feverBonusMult;
+  const feverIdx = Math.max(1, feverLevel) - 1;
+  // FEVER 中の出題エリアの枠。虹色で鼓動し、ゲージが残りわずかになると速くなる（拡大方向だけ。文字は小さくならない）
+  const feverFrame = calm ? 'dopa-rainbow-border' : feverLow ? 'hx-fever-frame hx-fever-hurry' : 'hx-fever-frame';
 
   return (
     <div className="relative w-full min-h-screen overflow-hidden font-pop">
@@ -926,7 +1034,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
               <div className={`relative w-full h-full flex items-center justify-center ${multiplier > 1 ? 'dopa-wiggle' : ''}`}>
                 <div className="absolute inset-0 hx-burst bg-neon-ink" />
                 <div className={`absolute inset-[5px] hx-burst ${multiplier >= 4 ? 'dopa-rainbow-fill' : multiplier > 1 ? 'bg-neon-pink' : 'bg-slate-500'}`} />
-                <span className="relative hx-num hx-sticker text-lg lg:text-3xl text-white">×{multiplier.toFixed(1)}</span>
+                <span className="relative hx-num hx-sticker text-lg lg:text-3xl text-white">×{multiplier >= 10 ? Math.round(multiplier) : multiplier.toFixed(1)}</span>
               </div>
             </div>
           </div>
@@ -1024,15 +1132,20 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
               <Flame className="w-7 h-7 md:w-10 md:h-10" strokeWidth={3} />
               {isFever ? 'FEVER!!' : 'FEVER'}
             </span>
-            <div className={`hx-gauge h-8 md:h-10 flex-1 ${feverLast ? 'dopa-blink' : isFever ? 'dopa-rainbow-border' : ''}`}>
-              {isFever ? (
-                <div className="h-full dopa-gauge-fever" style={{ '--fever': `${mods.feverSeconds}s`, animationPlayState: pausedAt ? 'paused' : 'running' } as React.CSSProperties} />
-              ) : (
-                <div className={`h-full dopa-gauge-fill ${hud.gauge >= FEVER_MAX * 0.8 ? 'dopa-blink' : ''}`} style={{ width: `${Math.min(100, (hud.gauge / FEVER_MAX) * 100)}%` }} />
-              )}
+            {/* 傾いていない入れ物。増減の演出（utils/gaugeFx.ts）はここに付ける */}
+            <div ref={gaugeWrapRef} className="relative flex-1">
+              <div className={`hx-gauge h-8 md:h-10 ${feverLow ? 'dopa-blink' : isFever ? 'dopa-rainbow-border' : ''}`}>
+                <div className="dopa-gauge-trail" />
+                {isFever ? (
+                  <div ref={gaugeBarRef} className="relative h-full dopa-gauge-fever" />
+                ) : (
+                  <div className={`relative h-full dopa-gauge-fill ${hud.gauge >= FEVER_MAX * 0.8 ? 'dopa-blink' : ''}`} style={{ width: `${Math.min(100, (hud.gauge / FEVER_MAX) * 100)}%` }} />
+                )}
+                <div className="dopa-gauge-shine" />
+              </div>
             </div>
-            <span className="hx-num hx-sticker shrink-0 w-24 md:w-32 text-left text-xl md:text-2xl text-white">
-              {isFever ? (isBonus ? 'スコア×4' : 'スコア×2') : `${hud.gauge}%`}
+            <span className={`hx-num hx-sticker shrink-0 w-24 md:w-32 text-left text-xl md:text-2xl whitespace-nowrap ${feverLevel >= 2 ? 'dopa-rainbow-text' : 'text-white'}`}>
+              {isFever ? `スコア×${feverBonusMult}` : `${hud.gauge}%`}
             </span>
           </div>
           {textSize === 'normal' && (
@@ -1060,13 +1173,13 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
       </div>
 
       {/* レイヤー3: 演出（Canvas） */}
-      <EffectCanvas ref={fxRef} maxParticles={calm ? 150 : isFever ? 450 : 300} ambient={calm ? 0 : counting ? 36 : isFever ? 70 : AMBIENT_PER_SEC[tier.level]} />
+      <EffectCanvas ref={fxRef} maxParticles={calm ? 150 : isFever ? 450 : 300} ambient={calm ? 0 : counting ? 36 : isFever ? FEVER_AMBIENT[feverIdx] : AMBIENT_PER_SEC[tier.level]} />
 
       {/* 画面のふちを走るネオン。コンボ段階で太く速くなる */}
       {!calm && (
         <div
           className={isFever || counting || tier.level >= 3 ? 'hx-edge-rainbow' : ''}
-          style={{ '--edge-w': isFever ? '18px' : counting ? '12px' : EDGE_WIDTH[tier.level], '--edge-spd': isFever || counting ? '0.5s' : `${2.4 - tier.level * 0.45}s` } as React.CSSProperties}
+          style={{ '--edge-w': isFever ? FEVER_EDGE_WIDTH[feverIdx] : counting ? '12px' : EDGE_WIDTH[tier.level], '--edge-spd': isFever ? FEVER_EDGE_SPEED[feverIdx] : counting ? '0.5s' : `${2.4 - tier.level * 0.45}s` } as React.CSSProperties}
         >
           <div className="hx-edge hx-edge-top" />
           <div className="hx-edge hx-edge-bottom" />
@@ -1097,6 +1210,17 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
               <Rabidopa anim="shout" className="relative h-[24vh] aspect-[720/700] -mt-[6vh]" />
               <div className="relative hx-num hx-sticker text-neon-yellow text-6xl md:text-8xl whitespace-nowrap">{cutin.text}</div>
               <Rabidopa anim="shout" className="relative h-[24vh] aspect-[720/700] -mt-[6vh]" />
+            </div>
+          )}
+          {cutin.type === 'feverup' && (
+            <div className="hx-cutin-band hx-cutin-slide top-[1vh] h-[15vh] dopa-rainbow-fill">
+              <div className="hx-cutin-speed" />
+              <Rabidopa anim="fever" aura={4} rainbow className="relative h-[24vh] aspect-[720/700] -mt-[6vh] shrink-0" />
+              <div className="relative text-center">
+                <div className="hx-sticker text-white text-[5vw] leading-none whitespace-nowrap">{cutin.text}</div>
+                {cutin.sub && <div className="hx-num hx-sticker text-neon-yellow text-3xl md:text-5xl leading-none whitespace-nowrap mt-1">{cutin.sub}</div>}
+              </div>
+              <Rabidopa anim="fever" aura={4} rainbow className="relative h-[24vh] aspect-[720/700] -mt-[6vh] shrink-0" />
             </div>
           )}
           {(cutin.type === 'tier' || cutin.type === 'awaken') && (

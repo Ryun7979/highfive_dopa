@@ -27,9 +27,9 @@ export const SKILL_NODES: SkillNode[] = [
   { id: 'unlock_conversation', branch: 'play', label: 'かいわ', desc: 'レベル「かいわ」で あそべる', cost: 2 },
   { id: 'ghost', branch: 'play', label: 'ゴーストたいせん', desc: 'じこベストの じぶんと スコアで しょうぶ', cost: 3 },
 
-  { id: 'fever_1', branch: 'boost', label: 'FEVER えんちょう 1', desc: 'FEVER が 1びょう ながくなる', cost: 1 },
-  { id: 'fever_2', branch: 'boost', label: 'FEVER えんちょう 2', desc: 'FEVER が さらに 1びょう ながくなる', cost: 2, requires: 'fever_1' },
-  { id: 'fever_3', branch: 'boost', label: 'FEVER えんちょう 3', desc: 'FEVER が さらに 1びょう ながくなる', cost: 3, requires: 'fever_2' },
+  { id: 'fever_1', branch: 'boost', label: 'FEVER えんちょう 1', desc: 'FEVER ゲージの へりが おそくなる', cost: 1 },
+  { id: 'fever_2', branch: 'boost', label: 'FEVER えんちょう 2', desc: 'FEVER ゲージの へりが さらに おそくなる', cost: 2, requires: 'fever_1' },
+  { id: 'fever_3', branch: 'boost', label: 'FEVER えんちょう 3', desc: 'FEVER ゲージの へりが さらに おそくなる', cost: 3, requires: 'fever_2' },
   { id: 'gauge_guard', branch: 'boost', label: 'ゲージまもり', desc: 'ミスしても ゲージが へりにくい', cost: 3, requires: 'fever_1' },
   { id: 'golden_1', branch: 'boost', label: 'ゴールデン アップ 1', desc: 'ゴールデンワードが でやすくなる', cost: 1 },
   { id: 'golden_2', branch: 'boost', label: 'ゴールデン アップ 2', desc: 'ゴールデンワードが もっと でやすくなる', cost: 2, requires: 'golden_1' },

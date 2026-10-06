@@ -35,7 +35,9 @@ export interface GameStats {
   wordsCleared: number;
   perfectWords: number;
   feverCount: number;
-  bonusScore: number;    // ボーナスタイム中にかせいだスコア（コインが ×2 になる分）
+  feverMaxLevel: number; // FEVER の段階がどこまで上がったか（0 は FEVER なし）
+  rewardScore: number;   // コインと EXP の計算に使うスコア（FEVER の倍々の分をのぞく）
+  bonusScore: number;    // ボーナスタイム中にかせいだごほうび用スコア（コインが ×2 になる分）
   goldenCleared: number; // クリアしたゴールデンワードの数
   trace: number[];       // 1秒ごとのスコア（ゴースト対戦用）
 }

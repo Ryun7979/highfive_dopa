@@ -498,11 +498,44 @@ body {
 .dopa-gauge-fever {
   background: linear-gradient(90deg, #FF2440, #FF7A00, #FFE600, #B6FF00, #00F0FF, #8B2BFF, #FF2E93, #FF2440);
   background-size: 200% 100%;
-  animation: dopa-gauge-drain var(--fever, 8s) linear forwards, dopa-gauge-flow 0.5s linear infinite;
+  /* 長さは GameScreen.tsx が 50ms ごとに書く（時間で減り、打つと回復する） */
+  transition: width 0.08s linear;
+  animation: dopa-gauge-flow 0.5s linear infinite;
 }
-@keyframes dopa-gauge-drain {
-  from { width: 100%; }
-  to { width: 0%; }
+/* ゲージの増減の演出（utils/gaugeFx.ts が動かす。ふだんは見えない） */
+.dopa-gauge-trail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  opacity: 0;
+  background: repeating-linear-gradient(-45deg, #FF2440 0 8px, #FFFFFF 8px 16px);
+}
+.dopa-gauge-shine {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.dopa-gauge-float {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  opacity: 0;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 2;
+}
+.dopa-gauge-wave {
+  position: absolute;
+  inset: -6px;
+  border: 5px solid #FFE600;
+  border-radius: 18px;
+  box-shadow: 0 0 24px #FFE600, inset 0 0 18px #FFFFFF;
+  opacity: 0;
+  pointer-events: none;
 }
 @keyframes dopa-gauge-flow {
   to { background-position: 200% 0; }
