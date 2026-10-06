@@ -37,6 +37,10 @@ const MUSIC_GAIN: Record<MusicTrack, number> = { title: 0.38, play: 0.38, fever:
 const DUCK_DEPTH = 0.45;
 const DUCK_DEPTH_FEVER = 0.75;
 const MUSIC_FADE = 0.35; // 曲を切り替えるときに重ねる秒数
+// ランク発表のジングル（public/assets/sounds/jingle/。Gemini で作成。docs/assets.md）
+const JINGLE_RANK_SRC = '/assets/sounds/jingle/jingle_rank.mp3';
+// ジングルもメロディのある曲なので、鳴っているあいだは BGM をほとんど聞こえないところまで下げる
+const DUCK_DEPTH_JINGLE = 0.12;
 
 class AudioManager {
   private ctx: AudioContext | null = null;
@@ -327,16 +331,87 @@ class AudioManager {
     if (duck > 0) this.duckMusic(duck);
   }
 
-  private duckMusic(sec: number) {
+  private duckEnd = 0;   // いま曲を下げている区間の終わり（ctx の時刻）
+  private duckLevel = 1; // その区間で曲を下げている倍率
+
+  // 下げているさいちゅうに重ねて呼ばれたら、長いほう・深いほうを残す
+  // （長いジングルの途中で短い効果音が鳴っても、曲が先に戻ってこないように）
+  private duckMusic(sec: number, depth: number = this.musicNow === 'fever' ? DUCK_DEPTH_FEVER : DUCK_DEPTH) {
     if (!this.ctx || !this.musicBus) return;
     const g = this.musicBus.gain;
     const now = this.ctx.currentTime;
+    const active = now < this.duckEnd;
+    this.duckLevel = active ? Math.min(depth, this.duckLevel) : depth;
+    this.duckEnd = active ? Math.max(this.duckEnd, now + sec) : now + sec;
     g.cancelScheduledValues(now);
     g.setValueAtTime(g.value, now);
-    const depth = this.musicNow === 'fever' ? DUCK_DEPTH_FEVER : DUCK_DEPTH;
-    g.linearRampToValueAtTime(depth, now + 0.03);
-    g.setValueAtTime(depth, now + sec);
-    g.linearRampToValueAtTime(1, now + sec + 0.35);
+    g.linearRampToValueAtTime(this.duckLevel, now + 0.03);
+    g.setValueAtTime(this.duckLevel, this.duckEnd);
+    g.linearRampToValueAtTime(1, this.duckEnd + 0.35);
+  }
+
+  // --- ジングル（曲のファイルを1回だけ鳴らす）---
+  private jingleBuffer: AudioBuffer | null = null;
+  private jingleLoading = false;
+  private jingleNow: { source: AudioBufferSourceNode; gain: GainNode } | null = null;
+
+  // 発表の前（ドラムロールのあいだ）に読んでおく
+  public preloadRankJingle() {
+    const ctx = this.ready();
+    if (!ctx || this.jingleBuffer || this.jingleLoading) return;
+    this.jingleLoading = true;
+    fetch(JINGLE_RANK_SRC)
+      .then(res => (res.ok ? res.arrayBuffer() : Promise.reject(new Error(String(res.status)))))
+      .then(data => ctx.decodeAudioData(data))
+      .then(buffer => { if (this.ctx === ctx) this.jingleBuffer = buffer; })
+      .catch(() => {})
+      .finally(() => { this.jingleLoading = false; });
+  }
+
+  // ランク発表のファンファーレ。まだ読めていなければ、合成のファンファーレで代える
+  public playRankJingle() {
+    const ctx = this.ready();
+    if (!ctx) return;
+    const buffer = this.jingleBuffer;
+    if (!buffer) {
+      this.playFanfare();
+      return;
+    }
+    this.stopJingle();
+    const now = ctx.currentTime;
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    const gain = ctx.createGain();
+    // 切りだした終わりがぷつっと切れないよう、最後だけ絞る
+    gain.gain.setValueAtTime(1, now + Math.max(0, buffer.duration - 0.2));
+    gain.gain.linearRampToValueAtTime(0, now + buffer.duration);
+    source.connect(gain);
+    gain.connect(this.masterGain!);
+    source.start(now);
+    const playing = { source, gain };
+    this.jingleNow = playing;
+    source.onended = () => { if (this.jingleNow === playing) this.jingleNow = null; };
+    this.duckMusic(buffer.duration, DUCK_DEPTH_JINGLE);
+  }
+
+  // 画面をはなれるときに止める（8秒あるので、次のプレイにかぶらないように）
+  public stopJingle() {
+    const playing = this.jingleNow;
+    if (!playing || !this.ctx) return;
+    this.jingleNow = null;
+    const now = this.ctx.currentTime;
+    playing.gain.gain.cancelScheduledValues(now);
+    playing.gain.gain.setValueAtTime(playing.gain.gain.value, now);
+    playing.gain.gain.linearRampToValueAtTime(0, now + 0.15);
+    playing.source.stop(now + 0.2);
+    // 下げていた曲を戻す
+    this.duckEnd = 0;
+    if (this.musicBus) {
+      const g = this.musicBus.gain;
+      g.cancelScheduledValues(now);
+      g.setValueAtTime(g.value, now);
+      g.linearRampToValueAtTime(1, now + 0.35);
+    }
   }
 
   // 成功の音に足す「ドン」という低い打撃
@@ -775,6 +850,8 @@ class AudioManager {
     window.clearTimeout(this.musicRetry);
     for (const m of this.music.values()) m.el.pause();
     this.music.clear();
+    this.jingleNow = null; // 鳴っていても、下の ctx.close() で止まる
+    this.jingleBuffer = null;
     this.musicWanted = null;
     this.musicNow = null;
     this.ctx?.close();

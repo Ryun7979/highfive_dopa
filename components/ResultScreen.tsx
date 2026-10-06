@@ -37,6 +37,16 @@ const RANK_FILL: Record<Rank, string> = {
   'SSS': 'bg-neon-pink',
   '∞': 'dopa-rainbow-fill',
 };
+// ランクのバッジの絵（public/assets/images/ui/。Gemini で作成。docs/assets.md）
+const RANK_IMAGE: Record<Rank, string> = {
+  'C': '/assets/images/ui/rank_c.webp',
+  'B': '/assets/images/ui/rank_b.webp',
+  'A': '/assets/images/ui/rank_a.webp',
+  'S': '/assets/images/ui/rank_s.webp',
+  'SS': '/assets/images/ui/rank_ss.webp',
+  'SSS': '/assets/images/ui/rank_sss.webp',
+  '∞': '/assets/images/ui/rank_inf.webp',
+};
 const RANK_WORD: Record<Rank, string> = {
   'C': 'ナイスファイト！',
   'B': 'いいかんじ！',
@@ -56,6 +66,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ stats, rank, isNewBest, pre
   const canGacha = !!rewards && rewards.coinsAfter >= GACHA_COST;
   const [revealed, setRevealed] = useState(false);
   const [shownScore, setShownScore] = useState(0);
+  const [badgeFailed, setBadgeFailed] = useState(false); // 絵が読めないときは文字で出す
   const fxRef = useRef<EffectHandle>(null);
   const rabbitRef = useRef<RabidopaHandle>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -72,14 +83,16 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ stats, rank, isNewBest, pre
 
   // ランク発表：ドラムロール → スタンプ → スコアがカウントアップ
   useEffect(() => {
+    new Image().src = RANK_IMAGE[rank]; // ドラムロールのあいだに絵を読んでおく
     audioManager.playDrumroll(DRUMROLL_MS / 1000);
+    if (rankIndex >= 2) audioManager.preloadRankJingle();
     let fireworks = 0;
     let raf = 0;
     let levelUpTimer = 0;
     const reveal = window.setTimeout(() => {
       setRevealed(true);
       audioManager.playRankSlam(rankIndex >= 3);
-      if (rankIndex >= 2) audioManager.playFanfare();
+      if (rankIndex >= 2) audioManager.playRankJingle();
       rabbitRef.current?.play('clear');
       // スキル「リザルト派手化」：発表の瞬間にカメラが寄って揺れる
       if (flashy && !calm) {
@@ -128,8 +141,9 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ stats, rank, isNewBest, pre
       clearTimeout(levelUpTimer);
       clearInterval(fireworks);
       cancelAnimationFrame(raf);
+      audioManager.stopJingle();
     };
-  }, [stats.score, rankIndex, calm, flashy, leveledUp]);
+  }, [stats.score, rank, rankIndex, calm, flashy, leveledUp]);
 
   // Enter で即リトライ、Esc でタイトルへ
   useEffect(() => {
@@ -245,6 +259,15 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ stats, rank, isNewBest, pre
             <div className="relative w-56 h-56 md:w-60 md:h-60 shrink-0 flex items-center justify-center">
               <div className={`absolute inset-0 hx-burst bg-neon-ink ${calm ? '' : revealed ? 'hx-spin-fast' : 'hx-spin'}`} />
               <div className={`absolute inset-[10px] hx-burst ${revealed ? RANK_FILL[rank] : 'bg-neon-panel'} ${calm ? '' : revealed ? 'hx-spin-fast' : 'hx-spin'}`} />
+              {revealed && !badgeFailed ? (
+                <img
+                  src={RANK_IMAGE[rank]}
+                  alt={`${rank} ランク`}
+                  draggable={false}
+                  onError={() => setBadgeFailed(true)}
+                  className="dopa-rank-slam relative w-full h-full object-contain drop-shadow-[6px_8px_0_#0B0320]"
+                />
+              ) : (
               <div className="relative flex flex-col items-center">
                 <span className="hx-sticker text-white text-xl md:text-2xl tracking-[0.3em] mb-4">RANK</span>
                 {revealed ? (
@@ -255,6 +278,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ stats, rank, isNewBest, pre
                   <span className="dopa-drumroll hx-num hx-sticker text-8xl md:text-[8rem] text-white/50 leading-none">?</span>
                 )}
               </div>
+              )}
             </div>
               <div className={`hx-sticker text-2xl md:text-4xl text-neon-yellow whitespace-nowrap ${revealed ? 'dopa-wiggle' : 'opacity-0'}`}>
                 {RANK_WORD[rank]}
