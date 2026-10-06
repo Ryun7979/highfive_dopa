@@ -736,3 +736,29 @@ body {
 .dopa-scroll::-webkit-scrollbar {
   display: none;
 }
+
+/* ==========================================================
+   ゴールデンワード・ボーナスタイム（文字の色と光だけ。大きさは変えない）
+   ========================================================== */
+.hx-gold-text {
+  animation: hx-gold-text 0.6s ease-in-out infinite alternate;
+}
+@keyframes hx-gold-text {
+  from { color: #FFC400; text-shadow: 0 0 0.08em #FF8F00, 0 0 0.3em #FFC400; }
+  to { color: #FFF8C4; text-shadow: 0 0 0.12em #FFE600, 0 0 0.6em #FFE600; }
+}
+.hx-gold-border {
+  animation: hx-gold-border 0.5s ease-in-out infinite alternate;
+}
+@keyframes hx-gold-border {
+  from { border-color: #FFC400; box-shadow: 0 0 40px #FFC400, inset 0 0 60px rgba(255, 196, 0, 0.25); }
+  to { border-color: #FFF8C4; box-shadow: 0 0 90px #FFE600, inset 0 0 120px rgba(255, 230, 0, 0.45); }
+}
+.hx-gold-fill {
+  background: linear-gradient(90deg, #FFB300, #FFF59D, #FFD600, #FF8F00, #FFF59D, #FFB300);
+  background-size: 200% 100%;
+  animation: dopa-gauge-flow 0.9s linear infinite;
+}
+.hx-bonus-drain {
+  animation: dopa-gauge-drain var(--bonus, 10s) linear forwards, dopa-gauge-flow 0.9s linear infinite;
+}

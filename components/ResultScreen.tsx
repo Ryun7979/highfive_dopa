@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { GameStats, Rank } from '../types';
-import { RefreshCw, CheckCircle, XCircle, Clock, CornerDownLeft, Flame, Keyboard, Home, Sparkles } from 'lucide-react';
+import { RefreshCw, CheckCircle, XCircle, Clock, CornerDownLeft, Flame, Keyboard, Home, Sparkles, GitBranch } from 'lucide-react';
 import { audioManager } from '../utils/audioManager';
 import { BestRecord, EffectLevel } from '../utils/saveData';
 import { getNextRank, RANKS } from '../utils/gameRules';
+import { PlayRewards, expToNext } from '../utils/progression';
 import DopaBackground from './DopaBackground';
 import EffectCanvas, { EffectHandle } from './EffectCanvas';
 import Rabidopa, { RabidopaHandle } from './Rabidopa';
@@ -13,7 +14,10 @@ interface ResultScreenProps {
   rank: Rank;
   isNewBest: boolean;
   prevBest?: BestRecord;
+  rewards?: PlayRewards;
+  flashy?: boolean; // スキル「リザルト派手化」
   effectLevel?: EffectLevel;
+  onOpenSkillTree: () => void;
   onRetry: () => void;
   onBackToTitle: () => void;
 }
@@ -41,11 +45,13 @@ const RANK_WORD: Record<Rank, string> = {
 const DRUMROLL_MS = 1000;
 const COUNT_MS = 1000;
 
-const ResultScreen: React.FC<ResultScreenProps> = ({ stats, rank, isNewBest, prevBest, effectLevel = 'max', onRetry, onBackToTitle }) => {
+const ResultScreen: React.FC<ResultScreenProps> = ({ stats, rank, isNewBest, prevBest, rewards, flashy = false, effectLevel = 'max', onOpenSkillTree, onRetry, onBackToTitle }) => {
   const [revealed, setRevealed] = useState(false);
   const [shownScore, setShownScore] = useState(0);
   const fxRef = useRef<EffectHandle>(null);
   const rabbitRef = useRef<RabidopaHandle>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const leveledUp = !!rewards && rewards.levelAfter > rewards.levelBefore;
 
   const calm = effectLevel === 'low';
   const rankIndex = RANKS.indexOf(rank);
@@ -61,16 +67,30 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ stats, rank, isNewBest, pre
     audioManager.playDrumroll(DRUMROLL_MS / 1000);
     let fireworks = 0;
     let raf = 0;
+    let levelUpTimer = 0;
     const reveal = window.setTimeout(() => {
       setRevealed(true);
       audioManager.playRankSlam(rankIndex >= 3);
       if (rankIndex >= 2) audioManager.playFanfare();
       rabbitRef.current?.play('clear');
+      // スキル「リザルト派手化」：発表の瞬間にカメラが寄って揺れる
+      if (flashy && !calm) {
+        panelRef.current?.animate(
+          [
+            { transform: 'scale(1.35) rotate(-4deg)', filter: 'brightness(2.2) hue-rotate(90deg)' },
+            { transform: 'scale(0.94) rotate(2deg)', filter: 'brightness(1.2) hue-rotate(0deg)', offset: 0.45 },
+            { transform: 'scale(1.06) rotate(-1deg)', filter: 'none', offset: 0.7 },
+            { transform: 'scale(1) rotate(0deg)', filter: 'none' },
+          ],
+          { duration: 900, easing: 'ease-out' }
+        );
+      }
+      if (leveledUp) levelUpTimer = window.setTimeout(() => audioManager.playLevelUp(), COUNT_MS + 200);
       const fx = fxRef.current;
       if (fx) {
         if (!calm) fx.flash('#FFFFFF', 0.9);
-        fx.confetti(calm ? 40 : 80 + rankIndex * 30);
-        for (let i = 0; i <= rankIndex; i++) fx.firework();
+        fx.confetti(calm ? 40 : 80 + rankIndex * 30 + (flashy ? 80 : 0));
+        for (let i = 0; i <= rankIndex + (flashy ? 4 : 0); i++) fx.firework();
         fx.burst(window.innerWidth / 2, window.innerHeight * 0.3, calm ? 30 : 90, 1.6);
       }
       // ランクが高いほど花火が止まらない
@@ -97,10 +117,11 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ stats, rank, isNewBest, pre
     }, DRUMROLL_MS);
     return () => {
       clearTimeout(reveal);
+      clearTimeout(levelUpTimer);
       clearInterval(fireworks);
       cancelAnimationFrame(raf);
     };
-  }, [stats.score, rankIndex, calm]);
+  }, [stats.score, rankIndex, calm, flashy, leveledUp]);
 
   // Enter で即リトライ、Esc でタイトルへ
   useEffect(() => {
@@ -141,7 +162,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ stats, rank, isNewBest, pre
       />
 
       <div className="relative z-30 h-screen overflow-y-auto overflow-x-hidden dopa-scroll flex flex-col items-center p-5 pt-10 md:p-8 md:pt-12 animate-fade-in w-full font-pop">
-        <div className="hx-panel w-full max-w-5xl my-auto p-5 md:p-8" style={{ '--edge': 'var(--pink)' } as React.CSSProperties}>
+        <div ref={panelRef} className="hx-panel w-full max-w-5xl my-auto p-5 md:p-8" style={{ '--edge': 'var(--pink)' } as React.CSSProperties}>
 
           {/* 見出しの札 */}
           <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2">
@@ -207,6 +228,28 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ stats, rank, isNewBest, pre
             ))}
           </div>
 
+          {/* もらえたもの：EXP とレベル */}
+          {rewards && (
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-4">
+              <div className="hx-tag px-5 py-1" style={{ '--edge': 'var(--cyan)' } as React.CSSProperties}>
+                <div className="hx-unskew flex items-center gap-3">
+                  <span className="hx-num text-2xl md:text-3xl text-neon-cyan whitespace-nowrap">EXP +{rewards.exp.toLocaleString()}</span>
+                  <span className="hx-num text-2xl md:text-3xl text-white whitespace-nowrap">Lv {rewards.levelAfter}</span>
+                  <div className="w-24 md:w-40 hx-gauge h-4">
+                    <div className="h-full dopa-gauge-fill" style={{ width: `${Math.min(100, (rewards.expAfter / expToNext(rewards.levelAfter)) * 100)}%` }} />
+                  </div>
+                </div>
+              </div>
+              {leveledUp && revealed && (
+                <div className="dopa-throb">
+                  <div className="hx-skew dopa-rainbow-fill border-[5px] border-neon-ink rounded-xl px-6 py-1 shadow-[6px_7px_0_#0B0320]">
+                    <span className="hx-unskew hx-sticker text-white text-xl md:text-3xl whitespace-nowrap">レベルアップ！！ スキルポイント +{rewards.spGain}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* 次の目標（もう1回の導線） */}
           <div className="mt-4 flex flex-col items-center gap-1 min-h-[4.5rem]">
             {next && (
@@ -236,6 +279,17 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ stats, rank, isNewBest, pre
                 </span>
               </button>
             </div>
+            {leveledUp && (
+              <button
+                onClick={() => { audioManager.playSelect(); onOpenSkillTree(); }}
+                className="hx-btn hx-purple px-7 py-3 text-xl md:text-2xl"
+              >
+                <span className="hx-btn-in">
+                  <GitBranch className="w-7 h-7 mr-2" strokeWidth={3} />
+                  スキルツリーへ
+                </span>
+              </button>
+            )}
             <button
               onClick={() => { audioManager.playCancel(); onBackToTitle(); }}
               className="hx-btn hx-dark px-7 py-3 text-xl md:text-2xl"

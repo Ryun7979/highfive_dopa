@@ -1,9 +1,11 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Star, Zap, Crown, Baby, MessageCircle, Volume2, Settings, SlidersHorizontal, Timer, ListChecks, Check } from 'lucide-react';
+import { Star, Zap, Crown, Baby, MessageCircle, Volume2, Settings, SlidersHorizontal, Timer, ListChecks, Check, Lock, GitBranch } from 'lucide-react';
 import { Difficulty, Mode } from '../types';
 import { audioManager, VolumeLevel } from '../utils/audioManager';
 import { EffectLevel, loadSave } from '../utils/saveData';
+import { expToNext } from '../utils/progression';
+import { isDifficultyUnlocked } from '../utils/skills';
 import DopaBackground from './DopaBackground';
 import EffectCanvas, { EffectHandle } from './EffectCanvas';
 import Rabidopa, { RabidopaHandle } from './Rabidopa';
@@ -14,6 +16,7 @@ interface TitleScreenProps {
   onStart: (mode: Mode, difficulty: Difficulty) => void;
   onOpenSettings: () => void;
   onOpenOptions: () => void;
+  onOpenSkillTree: () => void;
 }
 
 // ロゴ「はちゃめちゃ」。1文字ずつ色と傾きを変えて暴れさせる
@@ -28,10 +31,11 @@ const LOGO_CHARS = [
 
 const TICKER = 'コンボを つなげ！ ★ FEVER を ねらえ！ ★ ノーミスで PERFECT!! ★ うてば うつほど きもちいい！ ★ めざせ SSS ランク！ ★ ';
 
-const TitleScreen: React.FC<TitleScreenProps> = ({ initialMode = 'practice', effectLevel = 'max', onStart, onOpenSettings, onOpenOptions }) => {
+const TitleScreen: React.FC<TitleScreenProps> = ({ initialMode = 'practice', effectLevel = 'max', onStart, onOpenSettings, onOpenOptions, onOpenSkillTree }) => {
   const [volume, setVolume] = useState<VolumeLevel>(audioManager.getVolume());
   const [mode, setMode] = useState<Mode>(initialMode);
-  const [bests] = useState(() => loadSave().bests);
+  const [save] = useState(() => loadSave());
+  const { bests, player, skills } = save;
   const fxRef = useRef<EffectHandle>(null);
   const leftRef = useRef<RabidopaHandle>(null);
   const rightRef = useRef<RabidopaHandle>(null);
@@ -48,6 +52,12 @@ const TitleScreen: React.FC<TitleScreenProps> = ({ initialMode = 'practice', eff
   }, [calm]);
 
   const handleStart = (diff: Difficulty) => {
+    // まだ解放していないレベルは、スキルツリーへ案内する
+    if (!isDifficultyUnlocked(diff, skills)) {
+      audioManager.playCancel();
+      onOpenSkillTree();
+      return;
+    }
     audioManager.playSelect();
     onStart(mode, diff);
   };
@@ -120,6 +130,32 @@ const TitleScreen: React.FC<TitleScreenProps> = ({ initialMode = 'practice', eff
                 <span className="text-sm md:text-lg">オプション</span>
               </span>
             </button>
+          </div>
+
+          {/* レベル・EXP と スキルツリーの入口 */}
+          <div className="absolute top-3 left-3 md:top-5 md:left-6 z-20 flex items-center gap-4">
+            <div className="hx-tag px-3 py-1" style={{ '--edge': 'var(--cyan)' } as React.CSSProperties}>
+              <div className="hx-unskew flex items-center gap-2">
+                <span className="hx-num text-xl md:text-3xl text-white whitespace-nowrap">Lv {player.level}</span>
+                <div className="hidden lg:block w-28 hx-gauge h-4">
+                  <div className="h-full dopa-gauge-fill" style={{ width: `${Math.min(100, (player.exp / expToNext(player.level)) * 100)}%` }} />
+                </div>
+              </div>
+            </div>
+            <div className={player.sp > 0 && !calm ? 'dopa-throb' : ''}>
+              <button
+                onClick={() => { audioManager.playSelect(); onOpenSkillTree(); }}
+                className="hx-btn hx-yellow px-4 py-2"
+              >
+                <span className="hx-btn-in gap-2">
+                  <GitBranch size={22} strokeWidth={3} />
+                  <span className="hidden lg:inline text-lg whitespace-nowrap">スキルツリー</span>
+                  {player.sp > 0 && (
+                    <span className="hx-num text-sm md:text-lg bg-neon-ink text-neon-yellow rounded-lg px-2 whitespace-nowrap">SP {player.sp}</span>
+                  )}
+                </span>
+              </button>
+            </div>
           </div>
 
           {/* タイトルロゴ。両わきでラビッドパが騒ぐ */}
@@ -195,11 +231,12 @@ const TitleScreen: React.FC<TitleScreenProps> = ({ initialMode = 'practice', eff
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-5 px-2">
               {difficulties.map((diff) => {
                 const best = bests[`${mode}_${diff.id}`];
+                const unlocked = isDifficultyUnlocked(diff.id, skills);
                 return (
                   <button
                     key={diff.id}
                     onClick={() => handleStart(diff.id)}
-                    className={`hx-btn ${diff.color} p-3 md:p-4`}
+                    className={`hx-btn ${unlocked ? diff.color : 'hx-off'} p-3 md:p-4`}
                   >
                     <span className="hx-btn-in flex-col w-full">
                       <span className="flex items-center gap-2">
@@ -212,9 +249,15 @@ const TitleScreen: React.FC<TitleScreenProps> = ({ initialMode = 'practice', eff
                       </span>
                       <span className="hx-sticker text-2xl md:text-4xl mt-1 whitespace-nowrap">{diff.label}</span>
                       <span className="text-sm md:text-base bg-neon-ink/40 px-3 py-0.5 rounded-full mt-1 whitespace-nowrap">{diff.desc}</span>
-                      <span className="hx-num text-sm md:text-lg mt-2 bg-neon-ink text-neon-yellow px-3 py-0.5 rounded-lg whitespace-nowrap">
-                        {best ? `BEST ${best.score.toLocaleString()} [${best.rank}]` : 'BEST ---'}
-                      </span>
+                      {unlocked ? (
+                        <span className="hx-num text-sm md:text-lg mt-2 bg-neon-ink text-neon-yellow px-3 py-0.5 rounded-lg whitespace-nowrap">
+                          {best ? `BEST ${best.score.toLocaleString()} [${best.rank}]` : 'BEST ---'}
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-sm md:text-base mt-2 bg-neon-ink text-white px-3 py-0.5 rounded-lg whitespace-nowrap">
+                          <Lock size={16} strokeWidth={3} /> スキルツリーで かいほう
+                        </span>
+                      )}
                     </span>
                   </button>
                 );

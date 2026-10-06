@@ -6,6 +6,12 @@ export const ARCADE_SECONDS = 60;
 export const ARCADE_WORD_POOL = 200;
 export const FEVER_MAX = 100;
 export const FEVER_SECONDS = 10;
+// ゴールデンワードの出る確率と、クリアしたあとのボーナスタイム（スコア・コイン ×2）の長さ。スキルで伸びる
+export const GOLDEN_RATE = 0.1;
+export const BONUS_SECONDS = 10;
+// スキル「ラッキー演出」が出る確率と、「覚醒演出」が出るコンボ数
+export const LUCKY_RATE = 0.15;
+export const AWAKEN_COMBO = 100;
 // 小学校低学年でも1プレイのうちに FEVER に届くよう、1打で 5、単語クリアで 10 たまる
 export const GAUGE_PER_KEY = 5;
 export const GAUGE_PER_WORD = 10;
@@ -42,8 +48,8 @@ export const getComboTier = (combo: number): ComboTier => {
   return tier;
 };
 
-export const keyScore = (combo: number, fever: boolean): number =>
-  Math.round(10 * getComboTier(combo).mult * (fever ? 2 : 1));
+export const keyScore = (combo: number, fever: boolean, bonus: boolean = false): number =>
+  Math.round(10 * getComboTier(combo).mult * (fever ? 2 : 1) * (bonus ? 2 : 1));
 
 // 目安時間（1打鍵 1.2秒。低学年のペース）より速いほどスピードボーナスが最大 +50
 export const wordScore = (keyCount: number, elapsedMs: number, perfect: boolean): number => {

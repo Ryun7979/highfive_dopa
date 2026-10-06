@@ -2,6 +2,13 @@ export type VolumeLevel = 'HIGH' | 'MEDIUM' | 'LOW' | 'OFF';
 
 const VOLUME_STORAGE_KEY = 'TYPING_MINI_VOLUME_V1';
 
+// 打鍵の音階（半音の並び）。コンボが続くほど先へ進み、最後まで行くと頭に戻る
+export const SCALES = {
+  doremi: [0, 2, 4, 5, 7, 9, 11, 12],
+  wafu: [0, 2, 3, 7, 8, 12, 14, 15],
+  game: [0, 4, 7, 12, 7, 12, 16, 19],
+};
+
 class AudioManager {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
@@ -319,11 +326,81 @@ class AudioManager {
     src.stop(start + dur + 0.02);
   }
 
+  // 打鍵の音階パターン（ドレミ／和風／ゲーム風）。スキル「音階パターン追加」で選べるようになる
+  private scale: number[] = SCALES.doremi;
+
+  public setScale(pattern: keyof typeof SCALES) {
+    this.scale = SCALES[pattern] ?? SCALES.doremi;
+  }
+
+  // ゴールデンワードが出た合図
+  public playGolden() {
+    const ctx = this.ready();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    [91, 96, 100, 103].forEach((n, i) => {
+      this.tone(this.midi(n), t + i * 0.06, 0.35, 'sine', 0.3);
+      this.tone(this.midi(n + 12), t + i * 0.06, 0.2, 'triangle', 0.15);
+    });
+    this.noise(t, 0.5, 0.2, 'highpass', 7000);
+  }
+
+  // ボーナスタイム突入。double は FEVER と重なった「W ボーナス」
+  public playBonusStart(double: boolean) {
+    const ctx = this.ready();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    this.tone(400, t, 0.3, 'square', 0.25, 1600);
+    this.noise(t, 0.4, 0.3, 'bandpass', 500, undefined, 8000);
+    const notes = double ? [79, 84, 88, 91, 96, 100, 103, 108] : [79, 84, 88, 91, 96];
+    notes.forEach((n, i) => {
+      this.tone(this.midi(n), t + 0.3 + i * 0.05, 0.45, 'triangle', 0.3);
+      this.tone(this.midi(n), t + 0.3 + i * 0.05, 0.2, 'square', 0.1);
+    });
+  }
+
+  public playBonusEnd() {
+    const ctx = this.ready();
+    if (!ctx) return;
+    this.tone(1200, ctx.currentTime, 0.35, 'triangle', 0.25, 300);
+  }
+
+  // スキル「ラッキー演出」
+  public playLucky() {
+    const ctx = this.ready();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    [84, 91, 88, 96, 91, 100, 108].forEach((n, i) => this.tone(this.midi(n), t + i * 0.04, 0.3, 'square', 0.14));
+    this.noise(t, 0.6, 0.3, 'highpass', 6000);
+  }
+
+  public playLevelUp() {
+    const ctx = this.ready();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    [72, 76, 79, 84, 79, 84, 88, 96].forEach((n, i) => {
+      this.tone(this.midi(n), t + i * 0.09, 0.3, 'square', 0.16);
+      this.tone(this.midi(n + 12), t + i * 0.09, 0.3, 'triangle', 0.22);
+    });
+    this.noise(t + 0.7, 0.8, 0.35, 'highpass', 5000);
+  }
+
+  // スキル解放・ガチャの当たりなどの「ジャジャーン」
+  public playUnlock() {
+    const ctx = this.ready();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    this.tone(200, t, 0.25, 'sawtooth', 0.3, 1200);
+    [72, 76, 79, 84].forEach(n => this.tone(this.midi(n), t + 0.22, 0.6, 'square', 0.14));
+    this.tone(this.midi(96), t + 0.22, 0.7, 'triangle', 0.3);
+    this.noise(t + 0.22, 0.6, 0.3, 'highpass', 6000);
+  }
+
   // 正打鍵。コンボが続くほどドレミ…と音階が上がる（1オクターブでループ）
   public playTypeNote(combo: number) {
     const ctx = this.ready();
     if (!ctx) return;
-    const scale = [0, 2, 4, 5, 7, 9, 11, 12];
+    const scale = this.scale;
     const note = 72 + scale[(Math.max(1, combo) - 1) % scale.length];
     const t = ctx.currentTime;
     this.playBuffer('TYPE', (Math.random() * 50) - 25);

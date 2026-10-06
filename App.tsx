@@ -5,16 +5,21 @@ import ResultScreen from './components/ResultScreen';
 import LoadingScreen from './components/LoadingScreen';
 import DevSettingsScreen from './components/DevSettingsScreen';
 import OptionsScreen from './components/OptionsScreen';
+import SkillTreeScreen from './components/SkillTreeScreen';
 import { GameState, GameStats, Difficulty, Mode, Rank, WordDefinition } from './types';
 import { streamGeneratedWords } from './utils/wordGenerator';
 import { getSettings, FontType } from './utils/settingsManager';
 import { BestRecord, getBest, loadSave, recordResult } from './utils/saveData';
 import { ARCADE_WORD_POOL, getRank } from './utils/gameRules';
+import { PlayRewards, grantPlayRewards } from './utils/progression';
+import { DEFAULT_MODS, GameMods, getMods } from './utils/skills';
+import { audioManager } from './utils/audioManager';
 
 interface ResultInfo {
   rank: Rank;
   isNewBest: boolean;
   prevBest?: BestRecord;
+  rewards?: PlayRewards;
 }
 
 const App: React.FC = () => {
@@ -26,6 +31,9 @@ const App: React.FC = () => {
   const [gameWords, setGameWords] = useState<WordDefinition[]>([]);
   const [fontType, setFontType] = useState<FontType>(() => getSettings().fontType);
   const [gameSettings, setGameSettings] = useState(() => loadSave().settings);
+  // プレイ開始時点のスキルを反映したルール値と、ゴースト（自己ベストのスコア推移）
+  const [gameMods, setGameMods] = useState<GameMods>(DEFAULT_MODS);
+  const [ghostTrace, setGhostTrace] = useState<number[] | undefined>(undefined);
 
   const playedWordsRef = useRef<Set<string>>(new Set());
   const loadRunRef = useRef(0);
@@ -58,6 +66,11 @@ const App: React.FC = () => {
   };
 
   const startGame = useCallback((mode: Mode, difficulty: Difficulty) => {
+    const save = loadSave();
+    const mods = getMods(save.skills);
+    setGameMods(mods);
+    setGhostTrace(mods.ghost ? save.bests[`${mode}_${difficulty}`]?.trace : undefined);
+    audioManager.setScale(mods.scaleChoice ? save.settings.scale : 'doremi');
     setCurrentMode(mode);
     setCurrentDifficulty(difficulty);
     setGameState(GameState.LOADING);
@@ -79,7 +92,8 @@ const App: React.FC = () => {
     const rank = getRank(stats.score, stats.mode, stats.difficulty);
     const prevBest = getBest(stats.mode, stats.difficulty);
     const isNewBest = recordResult(stats, rank);
-    setResultInfo({ rank, isNewBest, prevBest });
+    const rewards = grantPlayRewards(stats);
+    setResultInfo({ rank, isNewBest, prevBest, rewards });
     setGameStats(stats);
     setGameState(GameState.RESULT);
   }, []);
@@ -94,6 +108,7 @@ const App: React.FC = () => {
             onStart={startGame}
             onOpenSettings={() => setGameState(GameState.DEV_SETTINGS)}
             onOpenOptions={() => setGameState(GameState.OPTIONS)}
+            onOpenSkillTree={() => setGameState(GameState.SKILL_TREE)}
           />
         )}
         {gameState === GameState.DEV_SETTINGS && (
@@ -101,6 +116,9 @@ const App: React.FC = () => {
         )}
         {gameState === GameState.OPTIONS && (
           <OptionsScreen onBack={() => { refreshSettings(); setGameState(GameState.TITLE); }} />
+        )}
+        {gameState === GameState.SKILL_TREE && (
+          <SkillTreeScreen effectLevel={gameSettings.effectLevel} onBack={() => setGameState(GameState.TITLE)} />
         )}
         {gameState === GameState.LOADING && <LoadingScreen />}
         {gameState === GameState.PLAYING && (
@@ -113,6 +131,8 @@ const App: React.FC = () => {
             fontType={fontType}
             effectLevel={gameSettings.effectLevel}
             textSize={gameSettings.textSize}
+            mods={gameMods}
+            ghostTrace={ghostTrace}
           />
         )}
         {gameState === GameState.RESULT && gameStats && (
@@ -121,6 +141,9 @@ const App: React.FC = () => {
             rank={resultInfo.rank}
             isNewBest={resultInfo.isNewBest}
             prevBest={resultInfo.prevBest}
+            rewards={resultInfo.rewards}
+            flashy={gameMods.resultFlashy}
+            onOpenSkillTree={() => setGameState(GameState.SKILL_TREE)}
             effectLevel={gameSettings.effectLevel}
             onRetry={retryGame}
             onBackToTitle={backToTitle}

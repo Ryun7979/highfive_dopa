@@ -5,6 +5,7 @@ export enum GameState {
   PLAYING = 'PLAYING',
   RESULT = 'RESULT',
   DEV_SETTINGS = 'DEV_SETTINGS',
+  SKILL_TREE = 'SKILL_TREE',
   OPTIONS = 'OPTIONS',
 }
 
@@ -32,6 +33,9 @@ export interface GameStats {
   wordsCleared: number;
   perfectWords: number;
   feverCount: number;
+  bonusScore: number;    // ボーナスタイム中にかせいだスコア（コインが ×2 になる分）
+  goldenCleared: number; // クリアしたゴールデンワードの数
+  trace: number[];       // 1秒ごとのスコア（ゴースト対戦用）
 }
 
 export interface WordDefinition {

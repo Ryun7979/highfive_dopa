@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { audioManager, VolumeLevel } from '../utils/audioManager';
 import { FontType, getSettings, saveSettings } from '../utils/settingsManager';
-import { EffectLevel, TextSize, loadSave, updateGameSettings } from '../utils/saveData';
+import { EffectLevel, ScalePattern, TextSize, loadSave, updateGameSettings } from '../utils/saveData';
+import { getMods } from '../utils/skills';
 import DopaBackground from './DopaBackground';
 
 interface OptionsScreenProps {
@@ -30,6 +31,11 @@ const TEXT_SIZES: Choice<TextSize>[] = [
   { value: 'normal', label: 'ふつう', desc: 'いつもの大きさ' },
   { value: 'large', label: 'おおきい', desc: 'もっと大きく' },
   { value: 'max', label: 'さいだい', desc: 'がめんいっぱい' },
+];
+const SCALE_CHOICES: Choice<ScalePattern>[] = [
+  { value: 'doremi', label: 'ドレミ' },
+  { value: 'wafu', label: 'わふう' },
+  { value: 'game', label: 'ゲームふう' },
 ];
 const FONTS: Choice<FontType>[] = [
   { value: 'POP', label: 'ポップ' },
@@ -70,6 +76,8 @@ const OptionsScreen: React.FC<OptionsScreenProps> = ({ onBack }) => {
   const [volume, setVolume] = useState<VolumeLevel>(audioManager.getVolume());
   const [settings, setSettings] = useState(() => loadSave().settings);
   const [fontType, setFontType] = useState<FontType>(() => getSettings().fontType);
+  // スキル「音階パターン追加」を取っていると選べる
+  const [scaleChoice] = useState(() => getMods(loadSave().skills).scaleChoice);
 
   const changeVolume = (level: VolumeLevel) => {
     audioManager.setVolume(level);
@@ -83,6 +91,12 @@ const OptionsScreen: React.FC<OptionsScreenProps> = ({ onBack }) => {
   const changeTextSize = (textSize: TextSize) => {
     audioManager.playSelect();
     setSettings(updateGameSettings({ textSize }).settings);
+  };
+  const changeScale = (scale: ScalePattern) => {
+    setSettings(updateGameSettings({ scale }).settings);
+    audioManager.setScale(scale);
+    // えらんだ音階をためしに鳴らす
+    [1, 2, 3, 4, 5].forEach((n, i) => window.setTimeout(() => audioManager.playTypeNote(n), i * 110));
   };
   const changeFont = (next: FontType) => {
     audioManager.playSelect();
@@ -106,6 +120,9 @@ const OptionsScreen: React.FC<OptionsScreenProps> = ({ onBack }) => {
             <ChoiceRow title="えんしゅつのつよさ" color="hx-pink" edge="var(--pink)" choices={EFFECTS} value={settings.effectLevel} onChange={changeEffect} />
             <ChoiceRow title="もじの大きさ" color="hx-yellow" edge="var(--yellow)" choices={TEXT_SIZES} value={settings.textSize} onChange={changeTextSize} />
             <ChoiceRow title="フォント" color="hx-lime" edge="var(--lime)" choices={FONTS} value={fontType} onChange={changeFont} />
+            {scaleChoice && (
+              <ChoiceRow title="うつ おとの おんかい" color="hx-orange" edge="var(--orange)" choices={SCALE_CHOICES} value={settings.scale} onChange={changeScale} />
+            )}
           </div>
 
           <div className="mt-6 mb-2 flex justify-center">
