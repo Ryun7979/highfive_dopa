@@ -48,6 +48,12 @@ const App: React.FC = () => {
     audioManager.setTypeVoice(getEquipped('sound').voice);
   }, []);
 
+  // 場面ごとの曲。プレイ中の曲（と FEVER の曲）はプレイ画面が自分で切り替える
+  useEffect(() => {
+    if (gameState === GameState.RESULT) audioManager.playMusic('result');
+    else if (gameState !== GameState.PLAYING && gameState !== GameState.LOADING) audioManager.playMusic('title');
+  }, [gameState]);
+
   // 設定画面からの復帰用
   const refreshSettings = useCallback(() => {
     setFontType(getSettings().fontType);

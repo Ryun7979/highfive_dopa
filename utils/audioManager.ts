@@ -22,6 +22,17 @@ export interface TypeVoice {
 }
 const DEFAULT_VOICE: TypeVoice = { main: 'triangle', over: 'square', overShift: 12, dur: 0.16 };
 
+// BGM の曲（public/assets/sounds/bgm/。Gemini で作成。docs/assets.md）
+export type MusicTrack = 'title' | 'play' | 'fever' | 'result';
+const MUSIC_SRC: Record<MusicTrack, string> = {
+  title: '/assets/sounds/bgm/bgm_title.mp3',
+  play: '/assets/sounds/bgm/bgm_play.mp3',
+  fever: '/assets/sounds/bgm/bgm_fever.mp3',
+  result: '/assets/sounds/bgm/bgm_result.mp3',
+};
+const MUSIC_GAIN = 0.4;  // 効果音にかぶらない大きさ（耳での調整はこれから）
+const MUSIC_FADE = 0.35; // 曲を切り替えるときに重ねる秒数
+
 class AudioManager {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
@@ -279,12 +290,11 @@ class AudioManager {
   // --- ここから highfive_dopa の追加分（その場で合成して鳴らす） ---
 
   private noiseBuffer: AudioBuffer | null = null;
-  private bgmGain: GainNode | null = null;
-  private bgmTimer: number | null = null;
-  private bgmStep = 0;
-  private bgmNextTime = 0;
-  private bgmRate = 1;
-  private bgmIntensity = 0;
+  private music = new Map<MusicTrack, { el: HTMLAudioElement; gain: GainNode }>();
+  private musicWanted: MusicTrack | null = null;
+  private musicNow: MusicTrack | null = null;
+  private musicArmed = false;
+  private bgmOn = false;
 
   // 鳴らせる状態なら AudioContext を返す
   private ready(): AudioContext | null {
@@ -551,97 +561,117 @@ class AudioManager {
     this.tone(this.midi(84 + (step % 12)), ctx.currentTime, 0.05, 'square', 0.12);
   }
 
-  // --- BGM（8分音符のステップシーケンサー）---
-  // コンボ段階（intensity）でパートが増え、FEVER（rate=2）で倍速になる
+  // --- BGM（曲のファイル。docs/assets.md）---
+  // タイトル・プレイ・FEVER・リザルトの4曲を、場面ごとに切り替えて流す。
 
+  // 場面の曲を流す。null で止める。音が出せるのは最初の操作のあとなので、それまでは覚えておくだけ
+  public playMusic(track: MusicTrack | null) {
+    this.musicWanted = track;
+    if (!this.musicArmed) {
+      this.musicArmed = true;
+      window.addEventListener('pointerdown', this.unlockMusic);
+      window.addEventListener('keydown', this.unlockMusic);
+      document.addEventListener('visibilitychange', this.onVisibility);
+    }
+    this.syncMusic();
+  }
+
+  private unlockMusic = () => {
+    this.init();
+    this.ctx?.resume().then(() => this.syncMusic());
+  };
+
+  // タブが裏に回ったら曲を止め、戻ってきたら流しなおす（開いたまま忘れたタブで鳴りつづけないように）
+  private onVisibility = () => {
+    for (const m of this.music.values()) m.el.pause();
+    this.musicNow = null;
+    if (!document.hidden) this.syncMusic();
+  };
+
+  private syncMusic() {
+    const ctx = this.ctx;
+    if (!ctx || !this.masterGain || ctx.state !== 'running' || document.hidden) return;
+    const want = this.musicWanted;
+    const from = this.musicNow;
+    if (want === from) return;
+    this.musicNow = want;
+    if (!want) {
+      this.fadeOthers(null);
+      return;
+    }
+    let cur = this.music.get(want);
+    if (!cur) {
+      const el = new Audio(MUSIC_SRC[want]);
+      el.loop = true;
+      el.preload = 'auto';
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
+      ctx.createMediaElementSource(el).connect(gain);
+      gain.connect(this.masterGain);
+      cur = { el, gain };
+      this.music.set(want, cur);
+    }
+    // FEVER が終わってプレイ曲に戻るときだけ、止めたところから続ける
+    if (!(want === 'play' && from === 'fever')) cur.el.currentTime = 0;
+    // 新しい曲が鳴りはじめてから前の曲を消す。読みこめなかったら前の曲を流しつづける
+    cur.el.play().then(() => {
+      // 鳴りはじめるまでのあいだに、もう別の曲に替わっていることがある
+      if (this.musicNow === want) this.fadeMusic(want, MUSIC_GAIN);
+      this.fadeOthers(this.musicNow);
+    }).catch(() => {
+      if (this.musicNow === want) this.musicNow = from;
+    });
+  }
+
+  // いまの曲のほかは、ぜんぶ消して止める
+  private fadeOthers(keep: MusicTrack | null) {
+    for (const track of this.music.keys()) {
+      if (track !== keep) this.fadeMusic(track, 0);
+    }
+  }
+
+  private fadeMusic(track: MusicTrack, to: number) {
+    const m = this.music.get(track);
+    if (!m || !this.ctx) return;
+    const now = this.ctx.currentTime;
+    m.gain.gain.cancelScheduledValues(now);
+    m.gain.gain.setValueAtTime(m.gain.gain.value, now);
+    m.gain.gain.linearRampToValueAtTime(to, now + MUSIC_FADE);
+    if (to === 0) window.setTimeout(() => { if (this.musicNow !== track) m.el.pause(); }, MUSIC_FADE * 1000 + 50);
+  }
+
+  // プレイ中の BGM。FEVER（rate=2）のあいだは FEVER の曲に切り替える
   public startBgm() {
-    const ctx = this.ready();
-    if (!ctx || this.bgmTimer !== null) return;
-    this.bgmGain = ctx.createGain();
-    this.bgmGain.gain.value = 0.45;
-    this.bgmGain.connect(this.masterGain!);
-    this.bgmStep = 0;
-    this.bgmRate = 1;
-    this.bgmIntensity = 0;
-    this.bgmNextTime = ctx.currentTime + 0.05;
-    this.bgmTimer = window.setInterval(() => this.scheduleBgm(), 40);
+    this.bgmOn = true;
+    this.playMusic('play');
   }
 
   public stopBgm() {
-    if (this.bgmTimer !== null) {
-      clearInterval(this.bgmTimer);
-      this.bgmTimer = null;
-    }
-    if (this.bgmGain && this.ctx) {
-      const g = this.bgmGain;
-      g.gain.setValueAtTime(g.gain.value, this.ctx.currentTime);
-      g.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.15);
-      window.setTimeout(() => g.disconnect(), 400);
-      this.bgmGain = null;
-    }
+    this.bgmOn = false;
+    this.playMusic(null);
   }
 
   public setBgmRate(rate: number) {
-    this.bgmRate = rate;
+    if (this.bgmOn) this.playMusic(rate > 1 ? 'fever' : 'play');
   }
 
-  public setBgmIntensity(level: number) {
-    this.bgmIntensity = level;
-  }
-
-  private scheduleBgm() {
-    if (!this.ctx || !this.bgmGain) return;
-    const stepDur = 60 / 132 / 2;
-    if (this.bgmNextTime < this.ctx.currentTime) this.bgmNextTime = this.ctx.currentTime + 0.02;
-    while (this.bgmNextTime < this.ctx.currentTime + 0.15) {
-      this.playBgmStep(this.bgmStep, this.bgmNextTime, stepDur / this.bgmRate);
-      this.bgmNextTime += stepDur / this.bgmRate;
-      this.bgmStep = (this.bgmStep + 1) % 32;
-    }
-  }
-
-  private playBgmStep(step: number, t: number, d: number) {
-    const out = this.bgmGain!;
-    const fever = this.bgmRate > 1;
-    const lv = fever ? 4 : this.bgmIntensity;
-    const bar = step >> 3, i = step & 7;
-    // C – G – Am – F
-    const roots = [48, 43, 45, 41];
-    const chord = bar === 2 ? [0, 3, 7, 12] : [0, 4, 7, 12];
-    const root = roots[bar];
-
-    // ベース
-    if (i === 0 || i === 3 || i === 4 || i === 6) {
-      const up = i === 3 || i === 6 ? 12 : 0;
-      this.tone(this.midi(root + up), t, d * 0.9, 'square', 0.22, undefined, out);
-      this.tone(this.midi(root + up - 12), t, d * 0.9, 'triangle', 0.4, undefined, out);
-    }
-    // キック
-    if (i % 4 === 0 || (lv >= 3 && i === 7)) {
-      this.tone(150, t, 0.16, 'sine', 0.95, 42, out);
-    }
-    // スネア
-    if (lv >= 2 && (i === 2 || i === 6)) {
-      this.noise(t, 0.14, 0.4, 'bandpass', 1800, out);
-      this.tone(220, t, 0.08, 'triangle', 0.25, 120, out);
-    }
-    // ハイハット
-    if (lv >= 1 || i % 2 === 1) {
-      this.noise(t, 0.035, i % 2 === 1 ? 0.22 : 0.1, 'highpass', 8000, out);
-    }
-    // メロディ（コードのアルペジオ）
-    if (lv >= 1) {
-      const pattern = [0, 2, 1, 2, 3, 2, 1, 2];
-      const note = root + 24 + chord[pattern[i]];
-      this.tone(this.midi(note), t, d * 0.6, 'square', 0.11, undefined, out);
-      if (lv >= 3) {
-        this.tone(this.midi(note + 12), t + d * 0.5, d * 0.4, 'triangle', 0.14, undefined, out);
-      }
-      if (lv >= 4) {
-        this.tone(this.midi(note + 7), t, d * 0.6, 'sawtooth', 0.05, undefined, out);
-      }
-    }
+  // 鳴っている音をぜんぶ止めて、片づける
+  public dispose() {
+    window.removeEventListener('pointerdown', this.unlockMusic);
+    window.removeEventListener('keydown', this.unlockMusic);
+    document.removeEventListener('visibilitychange', this.onVisibility);
+    for (const m of this.music.values()) m.el.pause();
+    this.music.clear();
+    this.musicWanted = null;
+    this.musicNow = null;
+    this.ctx?.close();
+    this.ctx = null;
+    this.masterGain = null;
   }
 }
 
-export const audioManager = new AudioManager();
+// 開発中にこのファイルが差し替わると、このファイルが読みなおされて audioManager が作りなおされる。
+// 前の audioManager の曲が鳴りつづけて新しい曲と重なるので、作りなおす前に止める
+const holder = globalThis as { __dopaAudio?: AudioManager };
+holder.__dopaAudio?.dispose();
+export const audioManager = holder.__dopaAudio = new AudioManager();

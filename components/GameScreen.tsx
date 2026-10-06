@@ -313,7 +313,6 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
     // 段階アップ
     if (tier.level > prevLevel) {
       audioManager.playComboUp(tier.level);
-      audioManager.setBgmIntensity(tier.level);
       showCutin({ type: 'tier', text: tier.shout, sub: `${g.combo} コンボ  スコア ×${tier.mult}` });
       fx?.confetti(calm ? 20 : 30 * tier.level);
       for (let i = 0; i < tier.level; i++) fx?.firework();
@@ -604,7 +603,6 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
     g.combo = 0;
     if (!g.fever) g.gauge = Math.floor(g.gauge * mods.gaugeKeepOnMiss);
     audioManager.playCrash();
-    audioManager.setBgmIntensity(0);
     rabbitRef.current?.play('miss');
     if (fxScale > 0) fxRef.current?.flash('#FF1744', 0.55 * fxScale);
     shake(22, 320);
