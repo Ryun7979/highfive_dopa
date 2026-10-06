@@ -82,7 +82,7 @@
 ## 4. 既存（highfive_7979）から踏襲するもの
 
 - **技術構成**: React 19 + TypeScript + Vite、lucide-react、Google Fonts（Mochiy Pop One / Zen Maru Gothic / JetBrains Mono）
-- **難易度5種**: かんたん／ふつう／むずかしい／マスター／かいわ（単語 約1,100語、`constants.ts`）
+- **難易度5種**: かんたん／ふつう／むずかしい／マスター／かいわ（単語 約1,300語、`constants.ts`）。「かんたん」だけ、濁音・半濁音・拗音を清音の3倍 出やすくする（10問中 およそ8問。`utils/wordGenerator.ts`）
 - **ローマ字入力判定**: モーラ単位の複数表記許容＋先読み（`romajiUtils.ts`）
 - **ヒント**: 5秒無入力 or 3連続ミスでキーボード図と担当指を表示（v0.10 で 10秒／5連続から変更。低学年向け）
 - **サウンド**: Web Audio（打鍵・ミス・決定・キャンセル・ファンファーレ）、音量 OFF/小/中/大
