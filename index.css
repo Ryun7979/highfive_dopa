@@ -363,15 +363,21 @@ body {
   75% { box-shadow: inset 0 0 160px 60px #8B2BFF; }
   100% { box-shadow: inset 0 0 120px 40px #FF2440; }
 }
-/* ガチャの背景アイテム。色あいを変えるだけ（最大段階と FEVER は元から虹色なので、そちらのアニメが勝つ） */
-.dopa-theme-sea { filter: hue-rotate(-70deg) saturate(1.15); }
-.dopa-theme-jungle { filter: hue-rotate(-150deg) saturate(1.1); }
-.dopa-theme-sunset { filter: hue-rotate(55deg) saturate(1.3); }
-.dopa-theme-gold { filter: sepia(1) saturate(2.6) brightness(1.05); }
-.dopa-theme-rainbow.dopa-bg-0,
-.dopa-theme-rainbow.dopa-bg-1,
-.dopa-theme-rainbow.dopa-bg-2,
-.dopa-theme-rainbow.dopa-bg-3 { animation: dopa-hue 6s linear infinite; }
+/* ガチャの背景アイテムの絵。コンボ段階が上がるほど薄くして、段階の色を前に出す */
+.dopa-photo {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center bottom;
+  opacity: var(--photo, 1);
+  filter: brightness(0.85); /* 明るい絵（雲・金貨）の上でも、じかに置いた文字が読めるように少し落とす */
+  transition: opacity 0.4s;
+}
+.dopa-bg-1 { --photo: 0.8; }
+.dopa-bg-2 { --photo: 0.55; }
+.dopa-bg-3 { --photo: 0.45; }
+.dopa-bg-4 { --photo: 0.3; }
+.dopa-bg-fever { --photo: 0.25; }
 .dopa-calm,
 .dopa-calm * {
   animation: none !important;

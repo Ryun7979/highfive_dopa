@@ -15,10 +15,10 @@ const SLIDE_SECONDS = [4, 2, 1, 0.6, 0.35];
 // 背景をのぼっていく文字と星
 const GLYPHS = ['A', '★', 'あ', 'K', '!', '♪', 'S', '★', 'ん', 'T', '?', '♪', 'E', '★', 'か', 'Y'];
 
-// 背景レイヤー。夜色の上に、放射状の光・ななめストライプ・網点・奥へ流れるネオンの床を重ねる。
+// 背景レイヤー。夜色の上に、装備中の背景の絵・放射状の光・ななめストライプ・網点・奥へ流れるネオンの床を重ねる。
 const DopaBackground: React.FC<DopaBackgroundProps> = ({ level = 0, fever = false, calm = false, theme }) => {
   const [equipped] = useState(() => getEquipped('bg'));
-  const themeClass = ((theme && getItem(theme)) || equipped).bgClass ?? '';
+  const image = ((theme && getItem(theme)) || equipped).bgImage;
   const style = {
     '--spin': `${fever ? 3 : SPIN_SECONDS[level]}s`,
     '--slide': `${fever ? 0.3 : SLIDE_SECONDS[level]}s`,
@@ -28,7 +28,8 @@ const DopaBackground: React.FC<DopaBackgroundProps> = ({ level = 0, fever = fals
   const speed = fever ? 0.25 : [1, 0.7, 0.5, 0.35, 0.25][level];
 
   return (
-    <div className={`dopa-bg ${fever ? 'dopa-bg-fever' : BG_CLASS[level]} ${themeClass} ${calm ? 'dopa-calm' : ''}`} style={style} aria-hidden>
+    <div className={`dopa-bg ${fever ? 'dopa-bg-fever' : BG_CLASS[level]} ${calm ? 'dopa-calm' : ''}`} style={style} aria-hidden>
+      {image && <div className="dopa-photo" style={{ backgroundImage: `url(${image})` }} />}
       <div className="dopa-sunburst" />
       <div className="dopa-stripes" />
       <div className="dopa-dots" />

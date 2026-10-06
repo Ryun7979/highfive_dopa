@@ -56,9 +56,10 @@ const ItemIcon: React.FC<ItemIconProps> = ({ item, locked = false, className = '
     );
   } else {
     body = (
-      <div className={`absolute inset-[8%] rounded-xl border-4 border-neon-ink overflow-hidden bg-neon-night dopa-bg-0 ${item.bgClass ?? ''}`}>
-        <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-neon-cyan/70 to-transparent" />
-      </div>
+      <div
+        className="absolute inset-[8%] rounded-xl border-4 border-neon-ink overflow-hidden bg-neon-night bg-cover bg-bottom"
+        style={item.bgImage ? { backgroundImage: `url(${item.bgImage})` } : undefined}
+      />
     );
   }
   return (

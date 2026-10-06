@@ -278,11 +278,11 @@ const TitleScreen: React.FC<TitleScreenProps> = ({ initialMode = 'practice', eff
               <div className="hx-tag px-5 py-1" style={{ '--edge': 'var(--pink)' } as React.CSSProperties}>
                 <span className="hx-unskew text-neon-pink text-lg md:text-2xl">③ きょうの ミッション</span>
               </div>
-              <span className="flex items-center gap-1 text-base md:text-xl text-neon-orange whitespace-nowrap">
+              <span className="hx-sticker flex items-center gap-1 text-base md:text-xl text-neon-orange whitespace-nowrap">
                 <Flame className="w-6 h-6" strokeWidth={3} />
                 {streak > 0 ? <><span className="hx-num text-2xl md:text-3xl">{streak}</span>にち れんぞく！</> : 'きょうも あそぼう！'}
               </span>
-              <span className="text-sm md:text-base text-white/70 whitespace-nowrap">
+              <span className="hx-sticker text-sm md:text-base text-white whitespace-nowrap">
                 {daily.bonusDone ? 'ぜんぶ たっせい！ すごい！' : `ぜんぶ できたら コイン +${ALL_CLEAR_COINS}`}
               </span>
             </div>

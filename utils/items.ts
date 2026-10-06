@@ -3,7 +3,7 @@ import { PALETTE, Palette } from './rabidopaRig';
 import { SaveData, loadSave, mutateSave } from './saveData';
 
 // ガチャで集めるアイテム（docs/spec.md §9.1）。4カテゴリ × 6種。
-// いまは全部コードだけで作ってある。素材ができたら、ここの定義に足す・差し替える。
+// はいけいは絵の素材（docs/assets.md）、ほかはコードだけで作ってある。素材ができたら、ここの定義に足す・差し替える。
 
 export type ItemCategory = 'costume' | 'effect' | 'sound' | 'bg';
 export type Rarity = 'N' | 'R' | 'SR' | 'SSR';
@@ -18,7 +18,7 @@ export interface ItemDef {
   colors?: string[];   // effect: パーティクルの色表
   voice?: TypeVoice;   // sound: 打鍵音の音色
   tint?: string;       // sound: 図鑑のアイコンの色
-  bgClass?: string;    // bg: .dopa-bg に足すクラス（index.css の dopa-theme-*）
+  bgImage?: string;    // bg: 背景に敷く絵（public/assets/images/bg/。docs/assets.md）
 }
 
 export const CATEGORIES: { id: ItemCategory; label: string }[] = [
@@ -55,12 +55,12 @@ export const ITEMS: ItemDef[] = [
   { id: 'sound_space', category: 'sound', tint: '#C99BFF', rarity: 'SR', label: 'うちゅう', voice: { main: 'sine', over: 'triangle', overShift: 7, dur: 0.22, slide: 2 } },
   { id: 'sound_kira', category: 'sound', tint: '#FF8CC6', rarity: 'SSR', label: 'キラキラ', voice: { main: 'triangle', over: 'sine', overShift: 24, dur: 0.3, overVol: 0.3, sparkle: true } },
 
-  { id: 'bg_night', category: 'bg', rarity: 'N', label: 'よるのネオン', bgClass: '' },
-  { id: 'bg_sea', category: 'bg', rarity: 'N', label: 'うみ', bgClass: 'dopa-theme-sea' },
-  { id: 'bg_jungle', category: 'bg', rarity: 'N', label: 'ジャングル', bgClass: 'dopa-theme-jungle' },
-  { id: 'bg_sunset', category: 'bg', rarity: 'R', label: 'ゆうやけ', bgClass: 'dopa-theme-sunset' },
-  { id: 'bg_gold', category: 'bg', rarity: 'SR', label: 'おうごん', bgClass: 'dopa-theme-gold' },
-  { id: 'bg_rainbow', category: 'bg', rarity: 'SSR', label: 'レインボー', bgClass: 'dopa-theme-rainbow' },
+  { id: 'bg_night', category: 'bg', rarity: 'N', label: 'よるのネオン', bgImage: '/assets/images/bg/bg_neon_night.webp' },
+  { id: 'bg_sea', category: 'bg', rarity: 'N', label: 'うみ', bgImage: '/assets/images/bg/bg_sea.webp' },
+  { id: 'bg_jungle', category: 'bg', rarity: 'N', label: 'ジャングル', bgImage: '/assets/images/bg/bg_jungle.webp' },
+  { id: 'bg_sunset', category: 'bg', rarity: 'R', label: 'ゆうやけ', bgImage: '/assets/images/bg/bg_sunset.webp' },
+  { id: 'bg_gold', category: 'bg', rarity: 'SR', label: 'おうごん', bgImage: '/assets/images/bg/bg_gold.webp' },
+  { id: 'bg_rainbow', category: 'bg', rarity: 'SSR', label: 'レインボー', bgImage: '/assets/images/bg/bg_rainbow.webp' },
 ];
 
 const ITEM_BY_ID = new Map(ITEMS.map(i => [i.id, i]));
