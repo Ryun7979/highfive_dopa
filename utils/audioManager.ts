@@ -30,7 +30,12 @@ const MUSIC_SRC: Record<MusicTrack, string> = {
   fever: '/assets/sounds/bgm/bgm_fever.mp3',
   result: '/assets/sounds/bgm/bgm_result.mp3',
 };
-const MUSIC_GAIN = 0.4;  // 効果音にかぶらない大きさ（耳での調整はこれから）
+// 曲の大きさ。4曲とも元の平均は -14dB で、0.38 で約 -22.4dB、0.55 で約 -19.2dB になる。
+// FEVER はにぎやかにしたいので大きくしてある
+const MUSIC_GAIN: Record<MusicTrack, number> = { title: 0.38, play: 0.38, fever: 0.55, result: 0.38 };
+// 成功の音が鳴るあいだ、曲をこの倍率まで下げる。FEVER 中は曲を主役のままにするので浅くする
+const DUCK_DEPTH = 0.45;
+const DUCK_DEPTH_FEVER = 0.75;
 const MUSIC_FADE = 0.35; // 曲を切り替えるときに重ねる秒数
 
 class AudioManager {
@@ -97,7 +102,17 @@ class AudioManager {
       this.ctx = new AudioContextClass();
       this.masterGain = this.ctx.createGain();
       this.masterGain.gain.value = this.getGain(this.currentLevel);
-      this.masterGain.connect(this.ctx.destination);
+      // 効果音を大きくしても音が割れないよう、出口にリミッターをはさむ
+      const limiter = this.ctx.createDynamicsCompressor();
+      limiter.threshold.value = -4;
+      limiter.knee.value = 4;
+      limiter.ratio.value = 14;
+      limiter.attack.value = 0.002;
+      limiter.release.value = 0.12;
+      this.masterGain.connect(limiter);
+      limiter.connect(this.ctx.destination);
+      this.musicBus = this.ctx.createGain();
+      this.musicBus.connect(this.masterGain);
       
       // Generate sounds in memory (Procedural Audio)
       this.generateAllSounds();
@@ -259,14 +274,15 @@ class AudioManager {
         source.detune.value = detune;
       }
       
-      source.connect(this.masterGain);
+      source.connect(this.sfxOut || this.masterGain);
       source.start(0);
     }
   }
 
   // Public Methods
   public playSelect() {
-    this.playBuffer('SELECT');
+    if (!this.ready()) return;
+    this.boosted(1.4, 0, () => this.playBuffer('SELECT'));
   }
 
   public playCancel() {
@@ -284,16 +300,55 @@ class AudioManager {
   }
 
   public playFanfare() {
-    this.playBuffer('FANFARE');
+    if (!this.ready()) return;
+    this.boosted(2.2, 1.2, () => this.playBuffer('FANFARE'));
   }
 
   // --- ここから highfive_dopa の追加分（その場で合成して鳴らす） ---
 
   private noiseBuffer: AudioBuffer | null = null;
+
+  // --- 音のバランス（数値は測ってから決める。LEARNINGS.md） ---
+  // body の中で鳴らす音を vol 倍にする。duck 秒のあいだ、曲を下げて効果音を前に出す
+  private sfxOut: AudioNode | null = null;
+  private musicBus: GainNode | null = null;
+
+  private boosted(vol: number, duck: number, body: () => void) {
+    if (!this.ctx || !this.masterGain) return;
+    const out = this.ctx.createGain();
+    out.gain.value = vol;
+    out.connect(this.masterGain);
+    this.sfxOut = out;
+    try {
+      body();
+    } finally {
+      this.sfxOut = null;
+    }
+    if (duck > 0) this.duckMusic(duck);
+  }
+
+  private duckMusic(sec: number) {
+    if (!this.ctx || !this.musicBus) return;
+    const g = this.musicBus.gain;
+    const now = this.ctx.currentTime;
+    g.cancelScheduledValues(now);
+    g.setValueAtTime(g.value, now);
+    const depth = this.musicNow === 'fever' ? DUCK_DEPTH_FEVER : DUCK_DEPTH;
+    g.linearRampToValueAtTime(depth, now + 0.03);
+    g.setValueAtTime(depth, now + sec);
+    g.linearRampToValueAtTime(1, now + sec + 0.35);
+  }
+
+  // 成功の音に足す「ドン」という低い打撃
+  private punch(t: number, vol: number = 0.25) {
+    this.tone(170, t, 0.18, 'sine', vol, 45);
+  }
   private music = new Map<MusicTrack, { el: HTMLAudioElement; gain: GainNode }>();
   private musicWanted: MusicTrack | null = null;
   private musicNow: MusicTrack | null = null;
   private musicArmed = false;
+  private musicRetry = 0;
+  private musicRetries = 0;
   private bgmOn = false;
 
   // 鳴らせる状態なら AudioContext を返す
@@ -319,7 +374,7 @@ class AudioManager {
     gain.gain.linearRampToValueAtTime(vol, start + 0.006);
     gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
     osc.connect(gain);
-    gain.connect(dest || this.masterGain!);
+    gain.connect(dest || this.sfxOut || this.masterGain!);
     osc.start(start);
     osc.stop(start + dur + 0.02);
   }
@@ -344,7 +399,7 @@ class AudioManager {
     gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
     src.connect(biquad);
     biquad.connect(gain);
-    gain.connect(dest || this.masterGain!);
+    gain.connect(dest || this.sfxOut || this.masterGain!);
     src.start(start);
     src.stop(start + dur + 0.02);
   }
@@ -366,25 +421,30 @@ class AudioManager {
   public playGolden() {
     const ctx = this.ready();
     if (!ctx) return;
-    const t = ctx.currentTime;
-    [91, 96, 100, 103].forEach((n, i) => {
-      this.tone(this.midi(n), t + i * 0.06, 0.35, 'sine', 0.3);
-      this.tone(this.midi(n + 12), t + i * 0.06, 0.2, 'triangle', 0.15);
+    this.boosted(1.9, 0.5, () => {
+      const t = ctx.currentTime;
+      [91, 96, 100, 103].forEach((n, i) => {
+        this.tone(this.midi(n), t + i * 0.06, 0.35, 'sine', 0.3);
+        this.tone(this.midi(n + 12), t + i * 0.06, 0.2, 'triangle', 0.15);
+      });
+      this.noise(t, 0.5, 0.2, 'highpass', 7000);
     });
-    this.noise(t, 0.5, 0.2, 'highpass', 7000);
   }
 
   // ボーナスタイム突入。double は FEVER と重なった「W ボーナス」
   public playBonusStart(double: boolean) {
     const ctx = this.ready();
     if (!ctx) return;
-    const t = ctx.currentTime;
-    this.tone(400, t, 0.3, 'square', 0.25, 1600);
-    this.noise(t, 0.4, 0.3, 'bandpass', 500, undefined, 8000);
-    const notes = double ? [79, 84, 88, 91, 96, 100, 103, 108] : [79, 84, 88, 91, 96];
-    notes.forEach((n, i) => {
-      this.tone(this.midi(n), t + 0.3 + i * 0.05, 0.45, 'triangle', 0.3);
-      this.tone(this.midi(n), t + 0.3 + i * 0.05, 0.2, 'square', 0.1);
+    this.boosted(2.0, 0.9, () => {
+      const t = ctx.currentTime;
+      this.tone(400, t, 0.3, 'square', 0.25, 1600);
+      this.noise(t, 0.4, 0.3, 'bandpass', 500, undefined, 8000);
+      const notes = double ? [79, 84, 88, 91, 96, 100, 103, 108] : [79, 84, 88, 91, 96];
+      notes.forEach((n, i) => {
+        this.tone(this.midi(n), t + 0.3 + i * 0.05, 0.45, 'triangle', 0.3);
+        this.tone(this.midi(n), t + 0.3 + i * 0.05, 0.2, 'square', 0.1);
+      });
+      this.punch(t + 0.3);
     });
   }
 
@@ -398,31 +458,40 @@ class AudioManager {
   public playLucky() {
     const ctx = this.ready();
     if (!ctx) return;
-    const t = ctx.currentTime;
-    [84, 91, 88, 96, 91, 100, 108].forEach((n, i) => this.tone(this.midi(n), t + i * 0.04, 0.3, 'square', 0.14));
-    this.noise(t, 0.6, 0.3, 'highpass', 6000);
+    this.boosted(1.8, 0.6, () => {
+      const t = ctx.currentTime;
+      [84, 91, 88, 96, 91, 100, 108].forEach((n, i) => this.tone(this.midi(n), t + i * 0.04, 0.3, 'square', 0.14));
+      this.noise(t, 0.6, 0.3, 'highpass', 6000);
+    });
   }
 
   public playLevelUp() {
     const ctx = this.ready();
     if (!ctx) return;
-    const t = ctx.currentTime;
-    [72, 76, 79, 84, 79, 84, 88, 96].forEach((n, i) => {
-      this.tone(this.midi(n), t + i * 0.09, 0.3, 'square', 0.16);
-      this.tone(this.midi(n + 12), t + i * 0.09, 0.3, 'triangle', 0.22);
+    this.boosted(2.2, 1.2, () => {
+      const t = ctx.currentTime;
+      [72, 76, 79, 84, 79, 84, 88, 96].forEach((n, i) => {
+        this.tone(this.midi(n), t + i * 0.09, 0.3, 'square', 0.16);
+        this.tone(this.midi(n + 12), t + i * 0.09, 0.3, 'triangle', 0.22);
+      });
+      this.noise(t + 0.7, 0.8, 0.35, 'highpass', 5000);
+      this.punch(t);
+      this.punch(t + 0.72, 0.3);
     });
-    this.noise(t + 0.7, 0.8, 0.35, 'highpass', 5000);
   }
 
   // スキル解放・ガチャの当たりなどの「ジャジャーン」
   public playUnlock() {
     const ctx = this.ready();
     if (!ctx) return;
-    const t = ctx.currentTime;
-    this.tone(200, t, 0.25, 'sawtooth', 0.3, 1200);
-    [72, 76, 79, 84].forEach(n => this.tone(this.midi(n), t + 0.22, 0.6, 'square', 0.14));
-    this.tone(this.midi(96), t + 0.22, 0.7, 'triangle', 0.3);
-    this.noise(t + 0.22, 0.6, 0.3, 'highpass', 6000);
+    this.boosted(1.7, 0.8, () => {
+      const t = ctx.currentTime;
+      this.tone(200, t, 0.25, 'sawtooth', 0.3, 1200);
+      [72, 76, 79, 84].forEach(n => this.tone(this.midi(n), t + 0.22, 0.6, 'square', 0.14));
+      this.tone(this.midi(96), t + 0.22, 0.7, 'triangle', 0.3);
+      this.noise(t + 0.22, 0.6, 0.3, 'highpass', 6000);
+      this.punch(t + 0.22, 0.3);
+    });
   }
 
   // 正打鍵。コンボが続くほどドレミ…と音階が上がる（1オクターブでループ）
@@ -444,16 +513,22 @@ class AudioManager {
   public playWordClear(perfect: boolean) {
     const ctx = this.ready();
     if (!ctx) return;
-    const t = ctx.currentTime;
-    const notes = perfect ? [84, 88, 91, 96, 100, 103] : [84, 88, 91, 96];
-    notes.forEach((n, i) => {
-      this.tone(this.midi(n), t + i * 0.045, 0.22, 'triangle', 0.4);
-      this.tone(this.midi(n), t + i * 0.045, 0.1, 'square', 0.08);
+    this.boosted(perfect ? 2.1 : 2.0, perfect ? 0.55 : 0.25, () => {
+      const t = ctx.currentTime;
+      const notes = perfect ? [84, 88, 91, 96, 100, 103] : [84, 88, 91, 96];
+      notes.forEach((n, i) => {
+        this.tone(this.midi(n), t + i * 0.045, 0.22, 'triangle', 0.4);
+        this.tone(this.midi(n), t + i * 0.045, 0.1, 'square', 0.08);
+      });
+      if (perfect) {
+        this.noise(t, 0.5, 0.25, 'highpass', 6000);
+        this.tone(this.midi(108), t + 0.28, 0.5, 'sine', 0.3);
+        // もう1オクターブ上でかけ上がる「やったー」
+        [96, 100, 103, 108].forEach((n, i) => this.tone(this.midi(n), t + 0.27 + i * 0.04, 0.3, 'triangle', 0.25));
+        this.noise(t, 0.4, 0.2, 'bandpass', 800, undefined, 6000);
+      }
+      this.punch(t, perfect ? 0.3 : 0.2);
     });
-    if (perfect) {
-      this.noise(t, 0.5, 0.25, 'highpass', 6000);
-      this.tone(this.midi(108), t + 0.28, 0.5, 'sine', 0.3);
-    }
   }
 
   // ミスの「ガシャーン」
@@ -473,37 +548,48 @@ class AudioManager {
   public playComboUp(level: number) {
     const ctx = this.ready();
     if (!ctx) return;
-    const t = ctx.currentTime;
-    this.tone(220, t, 0.3, 'sawtooth', 0.3, 880 * (1 + level * 0.25));
-    this.noise(t, 0.35, 0.3, 'bandpass', 400, undefined, 6000);
-    const root = 72 + level * 2;
-    [0, 4, 7, 12].forEach(n => this.tone(this.midi(root + n), t + 0.28, 0.4, 'square', 0.14));
+    this.boosted(2.0, 0.7, () => {
+      const t = ctx.currentTime;
+      this.tone(220, t, 0.3, 'sawtooth', 0.3, 880 * (1 + level * 0.25));
+      this.noise(t, 0.35, 0.3, 'bandpass', 400, undefined, 6000);
+      const root = 72 + level * 2;
+      [0, 4, 7, 12].forEach(n => this.tone(this.midi(root + n), t + 0.28, 0.4, 'square', 0.14));
+      this.punch(t + 0.28, 0.3);
+      [12, 16, 19, 24].forEach(n => this.tone(this.midi(root + n), t + 0.28, 0.5, 'triangle', 0.16));
+      this.noise(t + 0.28, 0.5, 0.25, 'highpass', 5000);
+    });
   }
 
   // ○コンボの節目の「ジャキーン」。step が大きいほど高い
   public playMilestone(step: number) {
     const ctx = this.ready();
     if (!ctx) return;
-    const t = ctx.currentTime;
-    const root = 76 + Math.min(step, 8) * 2;
-    this.noise(t, 0.25, 0.4, 'highpass', 5000);
-    this.tone(this.midi(root), t, 0.12, 'square', 0.2);
-    this.tone(this.midi(root + 7), t + 0.07, 0.4, 'square', 0.18);
-    this.tone(this.midi(root + 12), t + 0.07, 0.5, 'triangle', 0.3);
+    this.boosted(2.0, 0.4, () => {
+      const t = ctx.currentTime;
+      const root = 76 + Math.min(step, 8) * 2;
+      this.noise(t, 0.25, 0.4, 'highpass', 5000);
+      this.tone(this.midi(root), t, 0.12, 'square', 0.2);
+      this.tone(this.midi(root + 7), t + 0.07, 0.4, 'square', 0.18);
+      this.tone(this.midi(root + 12), t + 0.07, 0.5, 'triangle', 0.3);
+      this.punch(t, 0.25);
+    });
   }
 
   public playFeverStart() {
     const ctx = this.ready();
     if (!ctx) return;
-    const t = ctx.currentTime;
-    this.tone(300, t, 0.35, 'sawtooth', 0.35, 1800);
-    this.tone(300, t + 0.35, 0.35, 'sawtooth', 0.35, 2400);
-    this.noise(t, 0.7, 0.35, 'bandpass', 300, undefined, 9000);
-    [72, 76, 79, 84, 88, 91, 96].forEach((n, i) => {
-      this.tone(this.midi(n), t + 0.7 + i * 0.05, 0.5, 'square', 0.16);
-      this.tone(this.midi(n + 7), t + 0.7 + i * 0.05, 0.5, 'triangle', 0.2);
+    this.boosted(1.5, 1.5, () => {
+      const t = ctx.currentTime;
+      this.tone(300, t, 0.35, 'sawtooth', 0.35, 1800);
+      this.tone(300, t + 0.35, 0.35, 'sawtooth', 0.35, 2400);
+      this.noise(t, 0.7, 0.35, 'bandpass', 300, undefined, 9000);
+      [72, 76, 79, 84, 88, 91, 96].forEach((n, i) => {
+        this.tone(this.midi(n), t + 0.7 + i * 0.05, 0.5, 'square', 0.16);
+        this.tone(this.midi(n + 7), t + 0.7 + i * 0.05, 0.5, 'triangle', 0.2);
+      });
+      this.noise(t + 0.7, 0.9, 0.5, 'highpass', 5000);
+      this.punch(t + 0.7, 0.4);
     });
-    this.noise(t + 0.7, 0.9, 0.5, 'highpass', 5000);
   }
 
   public playFeverEnd() {
@@ -534,24 +620,28 @@ class AudioManager {
   public playDrumroll(dur: number) {
     const ctx = this.ready();
     if (!ctx) return;
-    const t = ctx.currentTime;
-    for (let s = 0; s < dur; s += 0.045) {
-      this.noise(t + s, 0.05, 0.25 + 0.4 * (s / dur), 'bandpass', 1800);
-    }
+    this.boosted(3.0, 0, () => {
+      const t = ctx.currentTime;
+      for (let s = 0; s < dur; s += 0.045) {
+        this.noise(t + s, 0.05, 0.25 + 0.4 * (s / dur), 'bandpass', 1800);
+      }
+    });
   }
 
   // ランクのスタンプが叩きつけられる音。big はランク S 以上
   public playRankSlam(big: boolean) {
     const ctx = this.ready();
     if (!ctx) return;
-    const t = ctx.currentTime;
-    this.tone(180, t, 0.6, 'sine', 1.0, 35);
-    this.noise(t, 0.8, 0.8, 'lowpass', 1200);
-    this.noise(t, 1.2, 0.5, 'highpass', 4000);
-    const chord = big ? [60, 64, 67, 72, 76, 79, 84] : [60, 64, 67, 72];
-    chord.forEach((n, i) => {
-      this.tone(this.midi(n), t + 0.05 + i * 0.03, big ? 1.6 : 0.9, 'sawtooth', 0.09);
-      this.tone(this.midi(n + 12), t + 0.05 + i * 0.03, big ? 1.6 : 0.9, 'triangle', 0.14);
+    this.boosted(1.0, 1.6, () => {
+      const t = ctx.currentTime;
+      this.tone(180, t, 0.6, 'sine', 1.0, 35);
+      this.noise(t, 0.8, 0.8, 'lowpass', 1200);
+      this.noise(t, 1.2, 0.5, 'highpass', 4000);
+      const chord = big ? [60, 64, 67, 72, 76, 79, 84] : [60, 64, 67, 72];
+      chord.forEach((n, i) => {
+        this.tone(this.midi(n), t + 0.05 + i * 0.03, big ? 1.6 : 0.9, 'sawtooth', 0.09);
+        this.tone(this.midi(n + 12), t + 0.05 + i * 0.03, big ? 1.6 : 0.9, 'triangle', 0.14);
+      });
     });
   }
 
@@ -564,7 +654,7 @@ class AudioManager {
   // --- BGM（曲のファイル。docs/assets.md）---
   // タイトル・プレイ・FEVER・リザルトの4曲を、場面ごとに切り替えて流す。
 
-  // 場面の曲を流す。null で止める。音が出せるのは最初の操作のあとなので、それまでは覚えておくだけ
+  // 場面の曲を流す。null で止める。ブラウザが音を許すまでは、覚えておくだけ
   public playMusic(track: MusicTrack | null) {
     this.musicWanted = track;
     if (!this.musicArmed) {
@@ -572,20 +662,36 @@ class AudioManager {
       window.addEventListener('pointerdown', this.unlockMusic);
       window.addEventListener('keydown', this.unlockMusic);
       document.addEventListener('visibilitychange', this.onVisibility);
+      // ウィンドウに戻ってきたときも、止まっていたら流しなおす
+      window.addEventListener('focus', this.wakeMusic);
+      window.addEventListener('pageshow', this.wakeMusic);
+      // 再読み込みのあとなど、ブラウザが許してくれるなら、操作を待たずにすぐ流す。
+      // 許されないときは、最初のクリックかキー入力で流れはじめる
+      this.init();
     }
-    this.syncMusic();
+    this.wakeMusic();
   }
 
   private unlockMusic = () => {
     this.init();
-    this.ctx?.resume().then(() => this.syncMusic());
+    this.wakeMusic();
+  };
+
+  // 音の出口が止まっていたら起こしてから、場面の曲を流す
+  private wakeMusic = () => {
+    const ctx = this.ctx;
+    if (!ctx || document.hidden) return;
+    if (ctx.state === 'running') this.syncMusic();
+    else ctx.resume().then(() => this.syncMusic()).catch(() => {});
   };
 
   // タブが裏に回ったら曲を止め、戻ってきたら流しなおす（開いたまま忘れたタブで鳴りつづけないように）
   private onVisibility = () => {
+    window.clearTimeout(this.musicRetry);
+    this.musicRetries = 0;
     for (const m of this.music.values()) m.el.pause();
     this.musicNow = null;
-    if (!document.hidden) this.syncMusic();
+    this.wakeMusic();
   };
 
   private syncMusic() {
@@ -607,7 +713,7 @@ class AudioManager {
       const gain = ctx.createGain();
       gain.gain.value = 0;
       ctx.createMediaElementSource(el).connect(gain);
-      gain.connect(this.masterGain);
+      gain.connect(this.musicBus ?? this.masterGain);
       cur = { el, gain };
       this.music.set(want, cur);
     }
@@ -616,10 +722,14 @@ class AudioManager {
     // 新しい曲が鳴りはじめてから前の曲を消す。読みこめなかったら前の曲を流しつづける
     cur.el.play().then(() => {
       // 鳴りはじめるまでのあいだに、もう別の曲に替わっていることがある
-      if (this.musicNow === want) this.fadeMusic(want, MUSIC_GAIN);
+      this.musicRetries = 0;
+      if (this.musicNow === want) this.fadeMusic(want, MUSIC_GAIN[want]);
       this.fadeOthers(this.musicNow);
     }).catch(() => {
       if (this.musicNow === want) this.musicNow = from;
+      // タブに戻った直後などは、ブラウザが再生をことわることがある。少し待ってやり直す
+      window.clearTimeout(this.musicRetry);
+      if (this.musicRetries++ < 5) this.musicRetry = window.setTimeout(this.wakeMusic, 700);
     });
   }
 
@@ -660,6 +770,9 @@ class AudioManager {
     window.removeEventListener('pointerdown', this.unlockMusic);
     window.removeEventListener('keydown', this.unlockMusic);
     document.removeEventListener('visibilitychange', this.onVisibility);
+    window.removeEventListener('focus', this.wakeMusic);
+    window.removeEventListener('pageshow', this.wakeMusic);
+    window.clearTimeout(this.musicRetry);
     for (const m of this.music.values()) m.el.pause();
     this.music.clear();
     this.musicWanted = null;
@@ -667,6 +780,7 @@ class AudioManager {
     this.ctx?.close();
     this.ctx = null;
     this.masterGain = null;
+    this.musicBus = null;
   }
 }
 
