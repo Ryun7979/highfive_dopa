@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { audioManager, VolumeLevel } from '../utils/audioManager';
 import { FontType, getSettings, saveSettings } from '../utils/settingsManager';
-import { EffectLevel, ScalePattern, TextSize, loadSave, updateGameSettings } from '../utils/saveData';
+import { BreakMinutes, EffectLevel, ScalePattern, TextSize, loadSave, updateGameSettings } from '../utils/saveData';
 import { getMods } from '../utils/skills';
 import DopaBackground from './DopaBackground';
 
@@ -36,6 +36,14 @@ const SCALE_CHOICES: Choice<ScalePattern>[] = [
   { value: 'doremi', label: 'ドレミ' },
   { value: 'wafu', label: 'わふう' },
   { value: 'game', label: 'ゲームふう' },
+];
+// ChoiceRow の値は文字列なので、分数は文字列で持って数に直す
+const BREAKS: Choice<string>[] = [
+  { value: '0', label: 'OFF' },
+  { value: '15', label: '15ふん' },
+  { value: '30', label: '30ぷん' },
+  { value: '45', label: '45ふん' },
+  { value: '60', label: '60ぷん' },
 ];
 const FONTS: Choice<FontType>[] = [
   { value: 'POP', label: 'ポップ' },
@@ -98,6 +106,10 @@ const OptionsScreen: React.FC<OptionsScreenProps> = ({ onBack }) => {
     // えらんだ音階をためしに鳴らす
     [1, 2, 3, 4, 5].forEach((n, i) => window.setTimeout(() => audioManager.playTypeNote(n), i * 110));
   };
+  const changeBreak = (value: string) => {
+    audioManager.playSelect();
+    setSettings(updateGameSettings({ breakMinutes: Number(value) as BreakMinutes }).settings);
+  };
   const changeFont = (next: FontType) => {
     audioManager.playSelect();
     saveSettings({ ...getSettings(), fontType: next });
@@ -120,6 +132,9 @@ const OptionsScreen: React.FC<OptionsScreenProps> = ({ onBack }) => {
             <ChoiceRow title="えんしゅつのつよさ" color="hx-pink" edge="var(--pink)" choices={EFFECTS} value={settings.effectLevel} onChange={changeEffect} />
             <ChoiceRow title="もじの大きさ" color="hx-yellow" edge="var(--yellow)" choices={TEXT_SIZES} value={settings.textSize} onChange={changeTextSize} />
             <ChoiceRow title="フォント" color="hx-lime" edge="var(--lime)" choices={FONTS} value={fontType} onChange={changeFont} />
+            <div className="lg:col-span-2">
+              <ChoiceRow title="きゅうけいの おしらせ" color="hx-purple" edge="var(--purple)" choices={BREAKS} value={String(settings.breakMinutes)} onChange={changeBreak} />
+            </div>
             {scaleChoice && (
               <ChoiceRow title="うつ おとの おんかい" color="hx-orange" edge="var(--orange)" choices={SCALE_CHOICES} value={settings.scale} onChange={changeScale} />
             )}

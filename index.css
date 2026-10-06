@@ -361,6 +361,15 @@ body {
   75% { box-shadow: inset 0 0 160px 60px #8B2BFF; }
   100% { box-shadow: inset 0 0 120px 40px #FF2440; }
 }
+/* ガチャの背景アイテム。色あいを変えるだけ（最大段階と FEVER は元から虹色なので、そちらのアニメが勝つ） */
+.dopa-theme-sea { filter: hue-rotate(-70deg) saturate(1.15); }
+.dopa-theme-jungle { filter: hue-rotate(-150deg) saturate(1.1); }
+.dopa-theme-sunset { filter: hue-rotate(55deg) saturate(1.3); }
+.dopa-theme-gold { filter: sepia(1) saturate(2.6) brightness(1.05); }
+.dopa-theme-rainbow.dopa-bg-0,
+.dopa-theme-rainbow.dopa-bg-1,
+.dopa-theme-rainbow.dopa-bg-2,
+.dopa-theme-rainbow.dopa-bg-3 { animation: dopa-hue 6s linear infinite; }
 .dopa-calm,
 .dopa-calm * {
   animation: none !important;
@@ -388,6 +397,8 @@ body {
 .rb-aura-3 { --aura: #00F0FF; filter: drop-shadow(0 0 16px #00F0FF) drop-shadow(0 0 30px #FF2E93); }
 .rb-aura-4 { --aura: #FFFFFF; animation: rb-awaken 0.7s linear infinite; }
 .rb-rainbow { animation: rb-awaken 0.5s linear infinite; }
+/* ガチャ衣装「にじいろ」。オーラの filter とぶつからないよう、内側の SVG の入れ物にかける */
+.rb-costume-rainbow { animation: dopa-hue 2.4s linear infinite; }
 @keyframes rb-awaken {
   0% { filter: drop-shadow(0 0 16px #FF2440) drop-shadow(0 0 36px #FFE600) hue-rotate(0deg) saturate(1.4); }
   100% { filter: drop-shadow(0 0 16px #FF2440) drop-shadow(0 0 36px #FFE600) hue-rotate(360deg) saturate(1.4); }

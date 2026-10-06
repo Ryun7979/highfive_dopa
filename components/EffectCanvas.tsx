@@ -1,4 +1,5 @@
-import React, { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { getEquipped, getItem } from '../utils/items';
 
 export const RAINBOW = ['#FF1744', '#FF9100', '#FFD600', '#00E676', '#00E5FF', '#2962FF', '#D500F9', '#F50057'];
 
@@ -14,6 +15,7 @@ export interface EffectHandle {
 interface EffectCanvasProps {
   maxParticles?: number; // 60fps 維持のための同時数の上限（docs/spec.md §12）
   ambient?: number;      // 1秒あたりに下からわき上がるキラキラの数
+  effect?: string;       // 打鍵エフェクトのアイテム ID。省くと、いま装備しているもの
 }
 
 type Kind = 'dot' | 'star' | 'char' | 'conf' | 'ring';
@@ -36,12 +38,16 @@ const drawStar = (ctx: CanvasRenderingContext2D, r: number) => {
 };
 
 // 演出レイヤー（Canvas）。親からは ref 経由で命令し、React の再描画を起こさない。
-const EffectCanvas = forwardRef<EffectHandle, EffectCanvasProps>(({ maxParticles = 300, ambient = 0 }, ref) => {
+const EffectCanvas = forwardRef<EffectHandle, EffectCanvasProps>(({ maxParticles = 300, ambient = 0, effect }, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const particles = useRef<Particle[]>([]);
   const flashRef = useRef<{ color: string; a: number }>({ color: '#fff', a: 0 });
   const maxRef = useRef(maxParticles);
   const ambientRef = useRef(ambient);
+  // パーティクルの色表は装備中のエフェクトで決まる
+  const [equipped] = useState(() => getEquipped('effect'));
+  const colorsRef = useRef<string[]>(RAINBOW);
+  colorsRef.current = ((effect && getItem(effect)) || equipped).colors ?? RAINBOW;
   maxRef.current = maxParticles;
   ambientRef.current = ambient;
 
@@ -58,21 +64,21 @@ const EffectCanvas = forwardRef<EffectHandle, EffectCanvasProps>(({ maxParticles
         const sp = rand(200, 900) * power;
         const max = rand(0.35, 0.8);
         push({ kind: Math.random() < 0.4 ? 'star' : 'dot', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 200, g: 1400,
-          life: max, max, size: rand(6, 18) * Math.min(1.6, power), color: pick(RAINBOW), rot: rand(0, 6), vr: rand(-10, 10) });
+          life: max, max, size: rand(6, 18) * Math.min(1.6, power), color: pick(colorsRef.current), rot: rand(0, 6), vr: rand(-10, 10) });
       }
     },
     flyChar: (x, y, ch) => {
       const max = 0.9;
       push({ kind: 'char', x, y, vx: rand(-700, 700), vy: rand(-1500, -900), g: 2200, life: max, max,
-        size: rand(48, 84), color: pick(RAINBOW), rot: 0, vr: rand(-12, 12), ch });
+        size: rand(48, 84), color: pick(colorsRef.current), rot: 0, vr: rand(-12, 12), ch });
     },
     ring: (x, y, color) => {
-      push({ kind: 'ring', x, y, vx: 0, vy: 0, g: 0, life: 0.5, max: 0.5, size: 20, color: color || pick(RAINBOW), rot: 0, vr: 0 });
+      push({ kind: 'ring', x, y, vx: 0, vy: 0, g: 0, life: 0.5, max: 0.5, size: 20, color: color || pick(colorsRef.current), rot: 0, vr: 0 });
     },
     firework: (x, y) => {
       const cx = x ?? rand(window.innerWidth * 0.15, window.innerWidth * 0.85);
       const cy = y ?? rand(window.innerHeight * 0.1, window.innerHeight * 0.5);
-      const color = pick(RAINBOW);
+      const color = pick(colorsRef.current);
       for (let i = 0; i < 36; i++) {
         const a = (i / 36) * Math.PI * 2;
         const sp = rand(350, 650);
@@ -86,7 +92,7 @@ const EffectCanvas = forwardRef<EffectHandle, EffectCanvasProps>(({ maxParticles
       for (let i = 0; i < count; i++) {
         const max = rand(1.2, 2.2);
         push({ kind: 'conf', x: rand(0, window.innerWidth), y: rand(-80, -10), vx: rand(-150, 150), vy: rand(200, 700), g: 500,
-          life: max, max, size: rand(10, 22), color: pick(RAINBOW), rot: rand(0, 6), vr: rand(-12, 12) });
+          life: max, max, size: rand(10, 22), color: pick(colorsRef.current), rot: rand(0, 6), vr: rand(-12, 12) });
       }
     },
     flash: (color, alpha) => {
@@ -123,7 +129,7 @@ const EffectCanvas = forwardRef<EffectHandle, EffectCanvasProps>(({ maxParticles
         ambientAcc -= 1;
         const max = rand(1.2, 2.4);
         push({ kind: 'star', x: rand(0, W), y: H + 20, vx: rand(-40, 40), vy: rand(-520, -220), g: 0, life: max, max,
-          size: rand(8, 20), color: pick(RAINBOW), rot: rand(0, 6), vr: rand(-4, 4) });
+          size: rand(8, 20), color: pick(colorsRef.current), rot: rand(0, 6), vr: rand(-4, 4) });
       }
 
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);

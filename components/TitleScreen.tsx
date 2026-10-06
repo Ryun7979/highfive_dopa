@@ -1,9 +1,11 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Star, Zap, Crown, Baby, MessageCircle, Volume2, Settings, SlidersHorizontal, Timer, ListChecks, Check, Lock, GitBranch } from 'lucide-react';
+import { Star, Zap, Crown, Baby, MessageCircle, Volume2, Settings, SlidersHorizontal, Timer, ListChecks, Check, Lock, GitBranch, Coins, Gift, BookOpen, Flame } from 'lucide-react';
 import { Difficulty, Mode } from '../types';
 import { audioManager, VolumeLevel } from '../utils/audioManager';
-import { EffectLevel, loadSave } from '../utils/saveData';
+import { EffectLevel, mutateSave } from '../utils/saveData';
+import { ALL_CLEAR_COINS, currentStreak, getMission, refreshDaily } from '../utils/daily';
+import { GACHA_COST } from '../utils/gacha';
 import { expToNext } from '../utils/progression';
 import { isDifficultyUnlocked } from '../utils/skills';
 import DopaBackground from './DopaBackground';
@@ -17,6 +19,8 @@ interface TitleScreenProps {
   onOpenSettings: () => void;
   onOpenOptions: () => void;
   onOpenSkillTree: () => void;
+  onOpenGacha: () => void;
+  onOpenCollection: () => void;
 }
 
 // ロゴ「はちゃめちゃ」。1文字ずつ色と傾きを変えて暴れさせる
@@ -31,11 +35,13 @@ const LOGO_CHARS = [
 
 const TICKER = 'コンボを つなげ！ ★ FEVER を ねらえ！ ★ ノーミスで PERFECT!! ★ うてば うつほど きもちいい！ ★ めざせ SSS ランク！ ★ ';
 
-const TitleScreen: React.FC<TitleScreenProps> = ({ initialMode = 'practice', effectLevel = 'max', onStart, onOpenSettings, onOpenOptions, onOpenSkillTree }) => {
+const TitleScreen: React.FC<TitleScreenProps> = ({ initialMode = 'practice', effectLevel = 'max', onStart, onOpenSettings, onOpenOptions, onOpenSkillTree, onOpenGacha, onOpenCollection }) => {
   const [volume, setVolume] = useState<VolumeLevel>(audioManager.getVolume());
   const [mode, setMode] = useState<Mode>(initialMode);
-  const [save] = useState(() => loadSave());
-  const { bests, player, skills } = save;
+  // 日付が変わっていたら、ここで今日のミッションに入れ替わる
+  const [save] = useState(() => mutateSave(data => refreshDaily(data)));
+  const { bests, player, skills, daily } = save;
+  const streak = currentStreak(daily);
   const fxRef = useRef<EffectHandle>(null);
   const leftRef = useRef<RabidopaHandle>(null);
   const rightRef = useRef<RabidopaHandle>(null);
@@ -262,6 +268,68 @@ const TitleScreen: React.FC<TitleScreenProps> = ({ initialMode = 'practice', eff
                   </button>
                 );
               })}
+            </div>
+          </div>
+
+          {/* ③ ごほうび：きょうのミッションと、ガチャ・ずかんの入口 */}
+          <div className="w-full">
+            <div className="flex flex-wrap items-center justify-start gap-3 mb-3">
+              <div className="hx-tag px-5 py-1" style={{ '--edge': 'var(--pink)' } as React.CSSProperties}>
+                <span className="hx-unskew text-neon-pink text-lg md:text-2xl">③ きょうの ミッション</span>
+              </div>
+              <span className="flex items-center gap-1 text-base md:text-xl text-neon-orange whitespace-nowrap">
+                <Flame className="w-6 h-6" strokeWidth={3} />
+                {streak > 0 ? <><span className="hx-num text-2xl md:text-3xl">{streak}</span>にち れんぞく！</> : 'きょうも あそぼう！'}
+              </span>
+              <span className="text-sm md:text-base text-white/70 whitespace-nowrap">
+                {daily.bonusDone ? 'ぜんぶ たっせい！ すごい！' : `ぜんぶ できたら コイン +${ALL_CLEAR_COINS}`}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-5 px-2 items-center">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {daily.missions.map(m => {
+                  const def = getMission(m.id);
+                  if (!def) return null;
+                  return (
+                    <div key={m.id} className="hx-tag px-3 py-1.5" style={{ '--edge': m.done ? 'var(--lime)' : 'var(--purple)' } as React.CSSProperties}>
+                      <div className="hx-unskew flex items-center gap-2 text-left">
+                        <span className={`shrink-0 flex items-center justify-center w-8 h-8 rounded-full border-[3px] ${m.done ? 'bg-neon-lime border-neon-ink text-neon-ink' : 'border-white/50 text-transparent'}`}>
+                          <Check strokeWidth={4} size={20} />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className={`block text-sm md:text-base leading-tight ${m.done ? 'text-neon-lime' : 'text-white'}`}>{def.label}</span>
+                          <span className="block text-sm text-white/70 whitespace-nowrap">
+                            <span className="hx-num">{m.progress.toLocaleString()}/{def.target.toLocaleString()}</span>
+                            <span className="ml-2 text-neon-yellow">{def.reward.coins ? `コイン +${def.reward.coins}` : `EXP +${def.reward.exp}`}</span>
+                          </span>
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex flex-wrap items-center justify-center gap-4">
+                <div className="hx-tag px-4 py-1" style={{ '--edge': 'var(--yellow)' } as React.CSSProperties}>
+                  <div className="hx-unskew flex items-center gap-2">
+                    <Coins className="w-7 h-7 text-neon-yellow" strokeWidth={3} />
+                    <span className="hx-num text-2xl md:text-3xl text-white whitespace-nowrap">{player.coins.toLocaleString()}</span>
+                  </div>
+                </div>
+                <div className={player.coins >= GACHA_COST && !calm ? 'dopa-throb' : ''}>
+                  <button onClick={() => { audioManager.playSelect(); onOpenGacha(); }} className="hx-btn hx-yellow px-5 py-2">
+                    <span className="hx-btn-in gap-2">
+                      <Gift size={26} strokeWidth={3} />
+                      <span className="text-xl md:text-2xl whitespace-nowrap">ガチャ</span>
+                    </span>
+                  </button>
+                </div>
+                <button onClick={() => { audioManager.playSelect(); onOpenCollection(); }} className="hx-btn hx-cyan px-5 py-2">
+                  <span className="hx-btn-in gap-2">
+                    <BookOpen size={26} strokeWidth={3} />
+                    <span className="text-xl md:text-2xl whitespace-nowrap">ずかん</span>
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
 

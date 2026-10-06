@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import TitleScreen from './components/TitleScreen';
 import GameScreen from './components/GameScreen';
 import ResultScreen from './components/ResultScreen';
@@ -6,6 +6,8 @@ import LoadingScreen from './components/LoadingScreen';
 import DevSettingsScreen from './components/DevSettingsScreen';
 import OptionsScreen from './components/OptionsScreen';
 import SkillTreeScreen from './components/SkillTreeScreen';
+import GachaScreen from './components/GachaScreen';
+import CollectionScreen from './components/CollectionScreen';
 import { GameState, GameStats, Difficulty, Mode, Rank, WordDefinition } from './types';
 import { streamGeneratedWords } from './utils/wordGenerator';
 import { getSettings, FontType } from './utils/settingsManager';
@@ -14,12 +16,15 @@ import { ARCADE_WORD_POOL, getRank } from './utils/gameRules';
 import { PlayRewards, grantPlayRewards } from './utils/progression';
 import { DEFAULT_MODS, GameMods, getMods } from './utils/skills';
 import { audioManager } from './utils/audioManager';
+import { getEquipped } from './utils/items';
+import { checkBreak, notePlayStart } from './utils/breakTimer';
 
 interface ResultInfo {
   rank: Rank;
   isNewBest: boolean;
   prevBest?: BestRecord;
   rewards?: PlayRewards;
+  suggestBreak?: boolean;
 }
 
 const App: React.FC = () => {
@@ -37,6 +42,11 @@ const App: React.FC = () => {
 
   const playedWordsRef = useRef<Set<string>>(new Set());
   const loadRunRef = useRef(0);
+
+  // 装備中の「おと」を打鍵音に反映する（つけかえたときは図鑑画面が切り替える）
+  useEffect(() => {
+    audioManager.setTypeVoice(getEquipped('sound').voice);
+  }, []);
 
   // 設定画面からの復帰用
   const refreshSettings = useCallback(() => {
@@ -71,6 +81,7 @@ const App: React.FC = () => {
     setGameMods(mods);
     setGhostTrace(mods.ghost ? save.bests[`${mode}_${difficulty}`]?.trace : undefined);
     audioManager.setScale(mods.scaleChoice ? save.settings.scale : 'doremi');
+    notePlayStart();
     setCurrentMode(mode);
     setCurrentDifficulty(difficulty);
     setGameState(GameState.LOADING);
@@ -93,7 +104,9 @@ const App: React.FC = () => {
     const prevBest = getBest(stats.mode, stats.difficulty);
     const isNewBest = recordResult(stats, rank);
     const rewards = grantPlayRewards(stats);
-    setResultInfo({ rank, isNewBest, prevBest, rewards });
+    // 休けいのお知らせは、プレイが終わったここでだけ判定する（途中では割り込まない）
+    const suggestBreak = checkBreak(loadSave().settings.breakMinutes);
+    setResultInfo({ rank, isNewBest, prevBest, rewards, suggestBreak });
     setGameStats(stats);
     setGameState(GameState.RESULT);
   }, []);
@@ -109,6 +122,22 @@ const App: React.FC = () => {
             onOpenSettings={() => setGameState(GameState.DEV_SETTINGS)}
             onOpenOptions={() => setGameState(GameState.OPTIONS)}
             onOpenSkillTree={() => setGameState(GameState.SKILL_TREE)}
+            onOpenGacha={() => setGameState(GameState.GACHA)}
+            onOpenCollection={() => setGameState(GameState.COLLECTION)}
+          />
+        )}
+        {gameState === GameState.GACHA && (
+          <GachaScreen
+            effectLevel={gameSettings.effectLevel}
+            onBack={() => setGameState(GameState.TITLE)}
+            onOpenCollection={() => setGameState(GameState.COLLECTION)}
+          />
+        )}
+        {gameState === GameState.COLLECTION && (
+          <CollectionScreen
+            effectLevel={gameSettings.effectLevel}
+            onBack={() => setGameState(GameState.TITLE)}
+            onOpenGacha={() => setGameState(GameState.GACHA)}
           />
         )}
         {gameState === GameState.DEV_SETTINGS && (
@@ -142,6 +171,8 @@ const App: React.FC = () => {
             isNewBest={resultInfo.isNewBest}
             prevBest={resultInfo.prevBest}
             rewards={resultInfo.rewards}
+            suggestBreak={resultInfo.suggestBreak}
+            onOpenGacha={() => setGameState(GameState.GACHA)}
             flashy={gameMods.resultFlashy}
             onOpenSkillTree={() => setGameState(GameState.SKILL_TREE)}
             effectLevel={gameSettings.effectLevel}

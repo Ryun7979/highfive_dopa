@@ -270,7 +270,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
     audioManager.playBonusStart(g.fever);
     showCutin(g.fever
       ? { type: 'bonus', text: 'W ボーナス!!', sub: 'スコア ×4' }
-      : { type: 'bonus', text: 'ボーナスタイム!!', sub: 'スコア ×2' });
+      : { type: 'bonus', text: 'ボーナスタイム!!', sub: 'スコア・コイン ×2' });
     fxRef.current?.confetti(calm ? 30 : 100);
     fxRef.current?.firework();
     fxRef.current?.firework();

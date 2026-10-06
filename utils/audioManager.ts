@@ -9,6 +9,19 @@ export const SCALES = {
   game: [0, 4, 7, 12, 7, 12, 16, 19],
 };
 
+// 打鍵音の音色（ガチャの「おと」アイテムで切り替える）。音階（SCALES）とは別物
+export interface TypeVoice {
+  main: OscillatorType;
+  over: OscillatorType;
+  overShift: number;  // 重ねる音を何半音ずらすか
+  dur: number;
+  mainVol?: number;
+  overVol?: number;
+  slide?: number;     // 周波数をこの倍率まで滑らせる
+  sparkle?: boolean;  // 高いキラキラを足す
+}
+const DEFAULT_VOICE: TypeVoice = { main: 'triangle', over: 'square', overShift: 12, dur: 0.16 };
+
 class AudioManager {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
@@ -333,6 +346,12 @@ class AudioManager {
     this.scale = SCALES[pattern] ?? SCALES.doremi;
   }
 
+  private voice: TypeVoice = DEFAULT_VOICE;
+
+  public setTypeVoice(voice?: TypeVoice) {
+    this.voice = voice ?? DEFAULT_VOICE;
+  }
+
   // ゴールデンワードが出た合図
   public playGolden() {
     const ctx = this.ready();
@@ -404,8 +423,11 @@ class AudioManager {
     const note = 72 + scale[(Math.max(1, combo) - 1) % scale.length];
     const t = ctx.currentTime;
     this.playBuffer('TYPE', (Math.random() * 50) - 25);
-    this.tone(this.midi(note), t, 0.16, 'triangle', 0.55);
-    this.tone(this.midi(note + 12), t, 0.07, 'square', 0.1);
+    const v = this.voice;
+    const freq = this.midi(note);
+    this.tone(freq, t, v.dur, v.main, v.mainVol ?? 0.55, v.slide ? freq * v.slide : undefined);
+    this.tone(this.midi(note + v.overShift), t, v.dur * 0.45, v.over, v.overVol ?? 0.1);
+    if (v.sparkle) this.tone(this.midi(note + 31), t + 0.05, 0.18, 'sine', 0.18);
   }
 
   // 単語クリア。ノーミス（PERFECT）はキラキラを足す

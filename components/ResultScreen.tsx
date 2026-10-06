@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { GameStats, Rank } from '../types';
-import { RefreshCw, CheckCircle, XCircle, Clock, CornerDownLeft, Flame, Keyboard, Home, Sparkles, GitBranch } from 'lucide-react';
+import { RefreshCw, CheckCircle, XCircle, Clock, CornerDownLeft, Flame, Keyboard, Home, Sparkles, GitBranch, Coins, Gift, Check } from 'lucide-react';
 import { audioManager } from '../utils/audioManager';
 import { BestRecord, EffectLevel } from '../utils/saveData';
 import { getNextRank, RANKS } from '../utils/gameRules';
 import { PlayRewards, expToNext } from '../utils/progression';
+import { ALL_CLEAR_COINS, STREAK_COINS, getMission } from '../utils/daily';
+import { GACHA_COST } from '../utils/gacha';
 import DopaBackground from './DopaBackground';
 import EffectCanvas, { EffectHandle } from './EffectCanvas';
 import Rabidopa, { RabidopaHandle } from './Rabidopa';
@@ -16,6 +18,8 @@ interface ResultScreenProps {
   prevBest?: BestRecord;
   rewards?: PlayRewards;
   flashy?: boolean; // スキル「リザルト派手化」
+  suggestBreak?: boolean; // 休けいお知らせ（§10）を出す
+  onOpenGacha: () => void;
   effectLevel?: EffectLevel;
   onOpenSkillTree: () => void;
   onRetry: () => void;
@@ -45,7 +49,10 @@ const RANK_WORD: Record<Rank, string> = {
 const DRUMROLL_MS = 1000;
 const COUNT_MS = 1000;
 
-const ResultScreen: React.FC<ResultScreenProps> = ({ stats, rank, isNewBest, prevBest, rewards, flashy = false, effectLevel = 'max', onOpenSkillTree, onRetry, onBackToTitle }) => {
+const ResultScreen: React.FC<ResultScreenProps> = ({ stats, rank, isNewBest, prevBest, rewards, flashy = false, suggestBreak = false, effectLevel = 'max', onOpenSkillTree, onOpenGacha, onRetry, onBackToTitle }) => {
+  const [breakOpen, setBreakOpen] = useState(suggestBreak);
+  const daily = rewards?.daily;
+  const canGacha = !!rewards && rewards.coinsAfter >= GACHA_COST;
   const [revealed, setRevealed] = useState(false);
   const [shownScore, setShownScore] = useState(0);
   const fxRef = useRef<EffectHandle>(null);
@@ -126,6 +133,14 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ stats, rank, isNewBest, pre
   // Enter で即リトライ、Esc でタイトルへ
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // 休けいのお知らせが出ているあいだは、閉じるだけ（いきなり次のプレイに進まない）
+      if (breakOpen) {
+        if (e.key === 'Enter' || e.key === 'Escape') {
+          audioManager.playSelect();
+          setBreakOpen(false);
+        }
+        return;
+      }
       if (e.key === 'Enter') {
         audioManager.playSelect();
         onRetry();
@@ -136,7 +151,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ stats, rank, isNewBest, pre
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onRetry, onBackToTitle]);
+  }, [onRetry, onBackToTitle, breakOpen]);
 
   const tiles = [
     { label: 'MAX コンボ', value: `${stats.maxCombo}`, icon: Flame, edge: 'var(--orange)', text: 'text-neon-orange' },
@@ -228,9 +243,16 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ stats, rank, isNewBest, pre
             ))}
           </div>
 
-          {/* もらえたもの：EXP とレベル */}
+          {/* もらえたもの：コイン・EXP とレベル */}
           {rewards && (
             <div className="mt-4 flex flex-wrap items-center justify-center gap-4">
+              <div className="hx-tag px-5 py-1" style={{ '--edge': 'var(--yellow)' } as React.CSSProperties}>
+                <div className="hx-unskew flex items-center gap-2">
+                  <Coins className="w-7 h-7 text-neon-yellow" strokeWidth={3} />
+                  <span className="hx-num text-2xl md:text-3xl text-neon-yellow whitespace-nowrap">コイン +{rewards.coins.toLocaleString()}</span>
+                  <span className="text-sm md:text-base text-white/70 whitespace-nowrap">もってる {rewards.coinsAfter.toLocaleString()}</span>
+                </div>
+              </div>
               <div className="hx-tag px-5 py-1" style={{ '--edge': 'var(--cyan)' } as React.CSSProperties}>
                 <div className="hx-unskew flex items-center gap-3">
                   <span className="hx-num text-2xl md:text-3xl text-neon-cyan whitespace-nowrap">EXP +{rewards.exp.toLocaleString()}</span>
@@ -250,6 +272,42 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ stats, rank, isNewBest, pre
             </div>
           )}
 
+          {/* きょうのミッションの進みぐあい */}
+          {daily && daily.missions.length > 0 && (
+            <div className="mt-4 bg-neon-ink/50 rounded-2xl border-4 border-neon-ink px-3 py-2">
+              <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 mb-2 text-base md:text-lg">
+                <span className="text-neon-pink">きょうの ミッション</span>
+                <span className="flex items-center gap-1 text-neon-orange whitespace-nowrap">
+                  <Flame className="w-5 h-5" strokeWidth={3} />
+                  <span className="hx-num text-xl md:text-2xl">{daily.streak}</span>にち れんぞく{daily.streakUp ? '！' : ''}
+                </span>
+                {daily.streakReward && <span className="hx-sticker text-neon-yellow whitespace-nowrap">れんぞく ごほうび コイン +{STREAK_COINS}！</span>}
+                {daily.allClear && <span className="hx-sticker text-neon-yellow whitespace-nowrap">ぜんぶ たっせい！ コイン +{ALL_CLEAR_COINS}！</span>}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-1">
+                {daily.missions.map(m => {
+                  const def = getMission(m.id);
+                  if (!def) return null;
+                  const reward = def.reward.coins ? `コイン +${def.reward.coins}` : `EXP +${def.reward.exp}`;
+                  return (
+                    <div key={m.id} className={`flex items-center gap-2 text-left ${m.justDone && revealed ? 'dopa-throb' : ''}`}>
+                      <span className={`shrink-0 flex items-center justify-center w-7 h-7 rounded-full border-[3px] ${m.done ? 'bg-neon-lime border-neon-ink text-neon-ink' : 'border-white/50 text-transparent'}`}>
+                        <Check strokeWidth={4} size={18} />
+                      </span>
+                      <span className="min-w-0">
+                        <span className={`block text-sm md:text-base leading-tight ${m.done ? 'text-neon-lime' : 'text-white'}`}>{def.label}</span>
+                        <span className="block text-sm whitespace-nowrap">
+                          <span className="hx-num text-white/70">{m.progress.toLocaleString()}/{def.target.toLocaleString()}</span>
+                          <span className={`ml-2 ${m.justDone ? 'hx-sticker text-neon-yellow' : 'text-white/60'}`}>{m.justDone ? `たっせい！ ${reward}` : reward}</span>
+                        </span>
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* 次の目標（もう1回の導線） */}
           <div className="mt-4 flex flex-col items-center gap-1 min-h-[4.5rem]">
             {next && (
@@ -264,13 +322,13 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ stats, rank, isNewBest, pre
             )}
           </div>
 
-          <div className="mt-3 mb-2 flex flex-col md:flex-row items-center justify-center gap-6 md:gap-8">
+          <div className="mt-3 mb-2 flex flex-col md:flex-row md:flex-wrap items-center justify-center gap-6 md:gap-x-8 md:gap-y-5">
             <div className="dopa-throb">
               <button
                 onClick={() => { audioManager.playSelect(); onRetry(); }}
                 className="hx-btn hx-yellow group px-12 py-4 text-3xl md:text-4xl"
               >
-                <span className="hx-btn-in">
+                <span className="hx-btn-in whitespace-nowrap">
                   <RefreshCw className="w-10 h-10 mr-4 group-hover:rotate-180 transition-transform duration-500" strokeWidth={3} />
                   <span className="hx-sticker">もういっかい！</span>
                   <span className="ml-4 flex items-center gap-1 text-lg bg-neon-ink/60 rounded-lg px-3 py-1">
@@ -284,9 +342,20 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ stats, rank, isNewBest, pre
                 onClick={() => { audioManager.playSelect(); onOpenSkillTree(); }}
                 className="hx-btn hx-purple px-7 py-3 text-xl md:text-2xl"
               >
-                <span className="hx-btn-in">
+                <span className="hx-btn-in whitespace-nowrap">
                   <GitBranch className="w-7 h-7 mr-2" strokeWidth={3} />
                   スキルツリーへ
+                </span>
+              </button>
+            )}
+            {canGacha && (
+              <button
+                onClick={() => { audioManager.playSelect(); onOpenGacha(); }}
+                className="hx-btn hx-orange px-7 py-3 text-xl md:text-2xl"
+              >
+                <span className="hx-btn-in whitespace-nowrap">
+                  <Gift className="w-7 h-7 mr-2" strokeWidth={3} />
+                  ガチャへ
                 </span>
               </button>
             )}
@@ -294,7 +363,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ stats, rank, isNewBest, pre
               onClick={() => { audioManager.playCancel(); onBackToTitle(); }}
               className="hx-btn hx-dark px-7 py-3 text-xl md:text-2xl"
             >
-              <span className="hx-btn-in">
+              <span className="hx-btn-in whitespace-nowrap">
                 <Home className="w-7 h-7 mr-2" />
                 タイトルへ
               </span>
@@ -303,6 +372,30 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ stats, rank, isNewBest, pre
 
         </div>
       </div>
+
+      {/* 休けいのお知らせ。プレイが終わったここでだけ出す */}
+      {breakOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-5 bg-neon-ink/90 font-pop">
+          <div className="hx-panel w-full max-w-2xl p-6 md:p-8 flex flex-col items-center gap-3 text-center" style={{ '--edge': 'var(--lime)' } as React.CSSProperties}>
+            <Rabidopa anim="idle" className="w-[150px] h-[146px] md:w-[210px] md:h-[204px] -mt-4" />
+            <div className="hx-sticker text-neon-lime text-2xl md:text-4xl whitespace-nowrap">ちょっと きゅうけい しよう！</div>
+            <div className="text-lg md:text-2xl text-white leading-snug">
+              たくさん あそんだね！<br />とおくを みて、からだを のばそう。
+            </div>
+            <button
+              onClick={() => { audioManager.playSelect(); setBreakOpen(false); }}
+              className="hx-btn hx-lime mt-2 px-12 py-3 text-2xl md:text-3xl"
+            >
+              <span className="hx-btn-in whitespace-nowrap">
+                <span className="hx-sticker">わかった！</span>
+                <span className="ml-4 flex items-center gap-1 text-lg bg-neon-ink/60 rounded-lg px-3 py-1">
+                  <CornerDownLeft size={18} /> Enter
+                </span>
+              </span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

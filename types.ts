@@ -7,6 +7,8 @@ export enum GameState {
   DEV_SETTINGS = 'DEV_SETTINGS',
   SKILL_TREE = 'SKILL_TREE',
   OPTIONS = 'OPTIONS',
+  GACHA = 'GACHA',
+  COLLECTION = 'COLLECTION',
 }
 
 export enum Difficulty {
