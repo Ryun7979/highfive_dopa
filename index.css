@@ -783,3 +783,142 @@ body {
 .hx-bonus-drain {
   animation: dopa-gauge-drain var(--bonus, 10s) linear forwards, dopa-gauge-flow 0.9s linear infinite;
 }
+
+/* プレイ開始のカウントダウン（components/StartCountdown.tsx）。--count は数字ごとの色 */
+/* ラビッドパの体は箱の下 62% にあるので、箱を大きくして上へずらし、帯のまん中に体を置く */
+.hx-count-rabbit { height: min(80vh, 50vw); margin-top: calc(min(80vh, 50vw) * -0.3); }
+.hx-count-slot { width: min(56vh, 38vw); height: 100%; }
+.hx-count-num { font-size: min(50vh, 34vw); }
+.hx-count-go { font-size: min(27vh, 15vw); }
+.hx-count-ready { font-size: min(13vh, 8vw); }
+
+/* 帯：ふちが数字の色に光り、数字ごとに傾きが左右に切りかわる */
+.hx-count-band {
+  box-shadow: 0 0 0 6px var(--count, #fff), 0 0 80px 10px var(--count, #fff);
+}
+.hx-count-band-in {
+  animation: hx-count-band-in 0.3s cubic-bezier(0.2, 1.4, 0.3, 1) forwards;
+}
+@keyframes hx-count-band-in {
+  0% { transform: scaleY(0) skewY(-3deg); }
+  100% { transform: scaleY(1) skewY(-3deg); }
+}
+.hx-count-tilt-r {
+  animation: hx-count-tilt-r 0.3s cubic-bezier(0.2, 1.6, 0.3, 1) forwards;
+}
+@keyframes hx-count-tilt-r {
+  0% { transform: scaleY(1.22) skewY(-3deg); }
+  100% { transform: scaleY(1) skewY(3deg); }
+}
+.hx-count-tilt-l {
+  animation: hx-count-tilt-l 0.3s cubic-bezier(0.2, 1.6, 0.3, 1) forwards;
+}
+@keyframes hx-count-tilt-l {
+  0% { transform: scaleY(1.22) skewY(3deg); }
+  100% { transform: scaleY(1) skewY(-3deg); }
+}
+.hx-count-band-out {
+  animation: hx-count-band-out 0.8s cubic-bezier(0.2, 1.4, 0.3, 1) forwards;
+}
+@keyframes hx-count-band-out {
+  0% { transform: scaleY(1.35) skewY(3deg); }
+  14% { transform: scaleY(1) skewY(-3deg); }
+  74% { transform: scaleY(1) skewY(-3deg); }
+  100% { transform: scaleY(0) skewY(-3deg); }
+}
+/* 帯の上下を流れる文字 */
+.hx-count-ticker {
+  position: absolute;
+  left: 0;
+  right: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  line-height: 1.5;
+  font-size: min(3.4vh, 2.6vw);
+  color: var(--ink);
+  background: var(--count, #fff);
+}
+.hx-count-ticker-track { animation-duration: 5s; }
+.hx-count-ticker-rev .hx-count-ticker-track { animation-direction: reverse; }
+
+/* 数字のうしろ：回る放射線・広がる衝撃波・ギザギザの爆発マーク */
+.hx-count-rays {
+  position: absolute;
+  width: min(120vh, 84vw);
+  height: min(120vh, 84vw);
+  flex: none;
+  background: repeating-conic-gradient(from 0deg, var(--count) 0deg 7deg, transparent 7deg 18deg);
+  -webkit-mask-image: radial-gradient(circle, #000 12%, transparent 66%);
+  mask-image: radial-gradient(circle, #000 12%, transparent 66%);
+  opacity: 0.7;
+  animation: dopa-spin 2.2s linear infinite;
+}
+.hx-count-wave {
+  position: absolute;
+  width: min(44vh, 30vw);
+  height: min(44vh, 30vw);
+  border-radius: 9999px;
+  border: min(2.4vh, 1.6vw) solid var(--count);
+  opacity: 0;
+  animation: hx-count-wave 0.6s ease-out forwards;
+}
+.hx-count-wave-2 {
+  border-color: #fff;
+  animation-delay: 0.12s;
+}
+@keyframes hx-count-wave {
+  0% { transform: scale(0.2); opacity: 1; }
+  100% { transform: scale(3.2); opacity: 0; }
+}
+.hx-count-burst {
+  position: absolute;
+  width: min(60vh, 40vw);
+  height: min(60vh, 40vw);
+}
+.hx-count-burst-in { background: #2A0F66; }
+.hx-count-pop {
+  animation: hx-count-pop 0.7s cubic-bezier(0.2, 1.8, 0.4, 1) forwards;
+}
+@keyframes hx-count-pop {
+  0% { transform: scale(0); }
+  22% { transform: scale(1.2); }
+  36% { transform: scale(1); }
+  84% { transform: scale(1.06); opacity: 1; }
+  100% { transform: scale(1.7); opacity: 0; }
+}
+.hx-count-slam {
+  animation: hx-count-slam 0.7s cubic-bezier(0.2, 1.6, 0.4, 1) forwards;
+}
+@keyframes hx-count-slam {
+  0% { transform: scale(4) rotate(-14deg); opacity: 0; }
+  20% { transform: scale(0.84) rotate(4deg); opacity: 1; }
+  32% { transform: scale(1) rotate(-2deg); opacity: 1; }
+  84% { transform: scale(1.05) rotate(-2deg); opacity: 1; }
+  100% { transform: scale(1.6) rotate(-2deg); opacity: 0; }
+}
+/* 「よーい…」「GO!!」が1文字ずつはねる */
+.hx-count-letter {
+  display: inline-block;
+  animation: hx-count-letter 0.22s ease-in-out infinite alternate;
+}
+@keyframes hx-count-letter {
+  from { transform: translateY(0.06em) rotate(-5deg) scale(0.96); }
+  to { transform: translateY(-0.1em) rotate(5deg) scale(1.08); }
+}
+.hx-count-go-slam {
+  animation: hx-count-go-slam 0.8s cubic-bezier(0.2, 1.6, 0.4, 1) forwards;
+}
+@keyframes hx-count-go-slam {
+  0% { transform: scale(5) rotate(-12deg); opacity: 0; }
+  18% { transform: scale(0.9) rotate(3deg); opacity: 1; }
+  30% { transform: scale(1) rotate(-3deg); opacity: 1; }
+  76% { transform: scale(1.08) rotate(-3deg); opacity: 1; }
+  100% { transform: scale(1.5) rotate(-3deg); opacity: 0; }
+}
+.hx-count-gorays { animation-duration: 0.8s; }
+.hx-count-fade {
+  animation: hx-count-fade 0.8s ease-out forwards;
+}
+@keyframes hx-count-fade {
+  to { opacity: 0; }
+}

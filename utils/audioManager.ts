@@ -676,6 +676,35 @@ class AudioManager {
   }
 
   // アーケードモードの残り時間カウント
+  // 開始カウントダウンの「3・2・1」。数字が小さくなるほど高い
+  public playCountBeep(n: number) {
+    const ctx = this.ready();
+    if (!ctx) return;
+    this.boosted(2.2, 0, () => {
+      const t = ctx.currentTime;
+      const note = 72 + (3 - n) * 2;
+      this.tone(this.midi(note), t, 0.22, 'square', 0.2);
+      this.tone(this.midi(note - 12), t, 0.26, 'triangle', 0.3);
+      this.punch(t, 0.25);
+    });
+  }
+
+  // 開始カウントダウンの「GO!!」
+  public playGo() {
+    const ctx = this.ready();
+    if (!ctx) return;
+    this.boosted(1.5, 0.8, () => {
+      const t = ctx.currentTime;
+      this.tone(400, t, 0.25, 'sawtooth', 0.25, 2000);
+      [79, 83, 86, 91].forEach(n => {
+        this.tone(this.midi(n), t, 0.7, 'square', 0.13);
+        this.tone(this.midi(n - 12), t, 0.7, 'triangle', 0.18);
+      });
+      this.noise(t, 0.6, 0.3, 'highpass', 5000);
+      this.punch(t, 0.35);
+    });
+  }
+
   public playTick() {
     const ctx = this.ready();
     if (!ctx) return;

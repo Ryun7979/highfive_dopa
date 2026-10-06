@@ -108,12 +108,21 @@ export function renderRabidopa(pose: PosePatch = {}, id = 'rb', P: Palette = PAL
 // ---- アニメーション（t: 秒 → pose）----
 const S = Math.sin, C = Math.cos, PI = Math.PI;
 
-export type LoopAnim = 'idle' | 'groove' | 'shout' | 'fever';
-export type OneShotAnim = 'type' | 'clear' | 'miss';
+export type LoopAnim = 'idle' | 'ready' | 'groove' | 'shout' | 'fever';
+export type OneShotAnim = 'type' | 'count' | 'clear' | 'miss';
 export type AnimName = LoopAnim | OneShotAnim;
 
 export const ANIMS: Record<AnimName, { label: string; dur: number; f: (t: number) => PosePatch }> = {
   idle: { label: '待機', dur: 2.4, f: t => { const a = t / 1.2 * PI; return { squash: 1 + 0.03 * S(a), ears: { l: { rot: 4 * S(a), len: 1 }, r: { rot: -5 * S(a + 1), len: 1 } } }; } },
+  // 開始カウントダウン中。体をちぢめて ぷるぷる ふるえながら力をためる
+  ready: { label: 'ため', dur: 0.6, f: t => { const a = t / 0.6 * 2 * PI; const w = S(a * 4); return { squash: 0.86 + 0.02 * w, tilt: 1.5 * w,
+    ears: { l: { rot: -18 + 4 * w, len: 0.9 }, r: { rot: 20 - 4 * w, len: 0.9 } },
+    arms: { l: { ang: -15 + 6 * w, len: 62, bend: 22 }, r: { ang: -15 - 6 * w, len: 62, bend: -22 } } }; } },
+  // カウントダウンの数字ごと。ぐっと ふみこんでから、星目で右うでをつきあげる
+  count: { label: 'カウント（パンチ）', dur: 0.55, f: t => { const p = t / 0.55; const down = p < 0.25 ? S(p / 0.25 * PI) : 0; const up = p < 0.25 ? 0 : S((p - 0.25) / 0.75 * PI);
+    return { expression: 'shout', squash: 0.9 - 0.16 * down + 0.24 * up, tilt: -8 * up, legs: { l: 46 * up, r: 46 * up },
+    ears: { l: { rot: -16 * up, len: 0.9 + 0.5 * up }, r: { rot: 18 * up, len: 0.9 + 0.5 * up } },
+    arms: { l: { ang: -20, len: 62 + 20 * up, bend: 22 }, r: { ang: 72, len: 70 + 130 * up, bend: -18 * up } } }; } },
   // コンボ 10–24 のノリノリ。待機より速く弾み、腕でリズムを取る
   groove: { label: 'ノリノリ', dur: 0.6, f: t => { const a = t / 0.6 * 2 * PI; const k = (S(a) + 1) / 2; return { expression: 'happy', squash: 1 - 0.07 * k, tilt: 5 * S(a / 2 * 2),
     legs: { l: 14 * k, r: 14 * k }, ears: { l: { rot: 12 * S(a), len: 1 + 0.1 * k }, r: { rot: -12 * S(a), len: 1 + 0.1 * k } },

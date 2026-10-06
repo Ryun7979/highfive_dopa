@@ -12,6 +12,7 @@ import { DEFAULT_MODS, GameMods } from '../utils/skills';
 import EffectCanvas, { EffectHandle, RAINBOW } from './EffectCanvas';
 import DopaBackground from './DopaBackground';
 import Rabidopa, { RabidopaHandle } from './Rabidopa';
+import StartCountdown from './StartCountdown';
 
 // タイマー表示専用コンポーネント。親のリ描画を抑える。
 // limitMs を渡すと残り時間のカウントダウンになる（アーケードモード）。
@@ -77,6 +78,8 @@ const COMBO_COLOR = ['text-white', 'text-neon-yellow', 'text-neon-orange', 'text
 const PARTICLES_PER_KEY = [8, 14, 20, 28, 40];
 const AMBIENT_PER_SEC = [0, 2, 6, 14, 30];
 
+const COUNT_COLOR: Record<3 | 2 | 1, string> = { 3: '#00F0FF', 2: '#FFE600', 1: '#FF2E93' };
+
 const EDGE_WIDTH = ['4px', '6px', '8px', '10px', '14px'];
 
 // カットイン：○コンボの節目（上の帯）／段階アップ（ラビッドパが中央へ飛び出す）／FEVER 突入（中央の大帯）
@@ -115,6 +118,8 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
   const [hud, setHud] = useState({ score: 0, combo: 0, gauge: 0, words: 0 });
   const [isFever, setIsFever] = useState(false);
   const [started, setStarted] = useState(false);
+  const [counting, setCounting] = useState(false); // 開始カウントダウンの表示中
+  const phaseRef = useRef<'wait' | 'count' | 'play'>('wait');
   const [isGolden, setIsGolden] = useState(false);
   const [isBonus, setIsBonus] = useState(false);
   const [bonusId, setBonusId] = useState(0);
@@ -397,16 +402,54 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
 
   useEffect(() => {
     wordsQueueRef.current = words;
-    if (currentWordIndex === 0 && !currentWord && words.length > 0) {
-       loadWord(words[0]);
-       startTimeRef.current = Date.now();
-       lastInputTimeRef.current = Date.now();
-       setStarted(true);
+    if (phaseRef.current === 'wait' && words.length > 0) {
+      // 出題がそろったら、まずカウントダウン。1問目とタイマーは GO!! で始める
+      phaseRef.current = 'count';
+      audioManager.playMusic(null);
+      setCounting(true);
     } else if (isWaitingForWord && words.length > currentWordIndex) {
       setIsWaitingForWord(false);
       loadWord(words[currentWordIndex]);
     }
   }, [words, isWaitingForWord, currentWordIndex, currentWord, loadWord]);
+
+  // カウントダウンの数字ごとの演出。0（GO!!）で1問目を出し、タイマーを動かす
+  const handleCountStep = useCallback((n: 3 | 2 | 1 | 0) => {
+    const fx = fxRef.current;
+    const cx = window.innerWidth / 2;
+    const cy = window.innerHeight / 2;
+    if (n > 0) {
+      // 数字が小さくなるほど、花火・紙ふぶき・ゆれが大きくなる
+      const color = COUNT_COLOR[n];
+      const k = 4 - n;
+      fx?.ring(cx, cy, color);
+      fx?.ring(cx, cy, '#FFFFFF');
+      fx?.burst(cx, cy, calm ? 10 : 30 + k * 10, 1.6);
+      if (!calm) {
+        fx?.burst(cx * 0.4, cy, 16, 1.2);
+        fx?.burst(cx * 1.6, cy, 16, 1.2);
+        fx?.confetti(12 * k);
+        for (let i = 0; i < k; i++) fx?.firework();
+      }
+      if (fxScale > 0) fx?.flash(color, (0.3 + k * 0.08) * fxScale);
+      shake(8 + k * 5, 220);
+      return;
+    }
+    if (phaseRef.current !== 'count') return;
+    phaseRef.current = 'play';
+    if (wordsQueueRef.current.length > 0) loadWord(wordsQueueRef.current[0]);
+    startTimeRef.current = Date.now();
+    lastInputTimeRef.current = Date.now();
+    setStarted(true);
+    fx?.confetti(calm ? 30 : 150);
+    fx?.burst(cx, cy, calm ? 20 : 90, 2);
+    for (let i = 0; i < (calm ? 1 : 6); i++) fx?.firework();
+    if (fxScale > 0) fx?.flash('#FFFFFF', 0.85 * fxScale);
+    invertFlash();
+    shake(30, 500);
+  }, [calm, fxScale, invertFlash, loadWord, shake]);
+
+  const handleCountEnd = useCallback(() => setCounting(false), []);
 
   // BGM はプレイ中だけ鳴らす
   useEffect(() => {
@@ -784,7 +827,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
               <div className={`hx-tape top-0 ${calm ? 'dopa-calm' : ''}`} />
               <div className={`hx-tape bottom-0 ${calm ? 'dopa-calm' : ''}`} />
               <div className="relative z-10 w-full max-w-[95%] mx-auto">
-                 {isWaitingForWord || !currentWord ? (
+                 {!started ? null : isWaitingForWord || !currentWord ? (
                    <div className="flex flex-col items-center justify-center animate-pulse py-12">
                       <Loader2 className="w-20 h-20 text-neon-yellow animate-spin mb-4" />
                       <p className="text-3xl text-white font-bold">つぎのもんだいをつくってるよ！</p>
@@ -871,19 +914,19 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
             anim={rabbitAnim}
             aura={tier.level}
             rainbow={isFever}
-            className="absolute right-0 bottom-0 z-30 h-[161%] aspect-[720/700]"
+            className={`absolute right-0 bottom-0 z-30 h-[161%] aspect-[720/700] ${started && !counting ? '' : 'opacity-0'}`}
           />
         </div>
       </div>
 
       {/* レイヤー3: 演出（Canvas） */}
-      <EffectCanvas ref={fxRef} maxParticles={calm ? 150 : 300} ambient={calm ? 0 : isFever ? 40 : AMBIENT_PER_SEC[tier.level]} />
+      <EffectCanvas ref={fxRef} maxParticles={calm ? 150 : 300} ambient={calm ? 0 : counting ? 36 : isFever ? 40 : AMBIENT_PER_SEC[tier.level]} />
 
       {/* 画面のふちを走るネオン。コンボ段階で太く速くなる */}
       {!calm && (
         <div
-          className={isFever || tier.level >= 3 ? 'hx-edge-rainbow' : ''}
-          style={{ '--edge-w': isFever ? '18px' : EDGE_WIDTH[tier.level], '--edge-spd': isFever ? '0.5s' : `${2.4 - tier.level * 0.45}s` } as React.CSSProperties}
+          className={isFever || counting || tier.level >= 3 ? 'hx-edge-rainbow' : ''}
+          style={{ '--edge-w': isFever ? '18px' : counting ? '12px' : EDGE_WIDTH[tier.level], '--edge-spd': isFever || counting ? '0.5s' : `${2.4 - tier.level * 0.45}s` } as React.CSSProperties}
         >
           <div className="hx-edge hx-edge-top" />
           <div className="hx-edge hx-edge-bottom" />
@@ -893,7 +936,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
       )}
 
       {/* 集中線。コンボ 12 以上と FEVER 中 */}
-      {!calm && (tier.level >= 2 || isFever) && <div className="hx-speedlines" />}
+      {!calm && (tier.level >= 2 || isFever || counting) && <div className="hx-speedlines" />}
 
       {/* 5コンボごとに画面いっぱいのコンボ数（ふちどりだけ） */}
       {ghost && (
@@ -901,6 +944,9 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
           <div className="hx-ghost-combo hx-num">{ghost.n}</div>
         </div>
       )}
+
+      {/* 開始のカウントダウン */}
+      {counting && <StartCountdown calm={calm} onStep={handleCountStep} onEnd={handleCountEnd} />}
 
       {/* カットイン */}
       {cutin && (
