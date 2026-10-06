@@ -874,6 +874,92 @@ body {
   100% { transform: scale(1.3) rotate(-2deg); opacity: 0; }
 }
 
+/* 叫び文字（components/ShoutText.tsx）：カットインの「FEVER!!」などをロゴ風に見せる。
+   1文字 = 2枚重ね。本体 黒ふち＋細い白ふち＋片側に落ちる影 ／ ::after 同じ色あいの濃淡＋光沢。
+   色は1つの色あいの中だけで変える（色を混ぜない）。影は右下の1方向だけで、ぼかさない */
+.hx-shout {
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+  white-space: nowrap;
+  line-height: 1.15;
+  font-family: "Mochiy Pop One", sans-serif;
+  --s1: #FFFDE8;
+  --s2: #FFE600;
+  --s3: #FFB000;
+}
+.hx-shout-pink {
+  --s1: #FFF0F7;
+  --s2: #FF7DBD;
+  --s3: #FF2E93;
+}
+.hx-shout-sp { width: 0.32em; flex: none; }
+/* 交互に少し傾けて、はねた並びにする（アニメの transform とぶつからないよう、傾きは外側の箱に付ける） */
+.hx-shout-slot { display: inline-block; transform: rotate(-2deg) translateY(-0.02em); }
+.hx-shout-slot:nth-child(even) { transform: rotate(2deg) translateY(0.02em); }
+.hx-shout-ch {
+  position: relative;
+  display: inline-block;
+  isolation: isolate;
+  padding: 0 0.03em;
+  color: var(--ink);
+  -webkit-text-stroke: 0.16em var(--ink);
+  /* 上から順に：細い白ふち（影を円くずらして重ねる。太い text-stroke だと W などの角がとがる）→ 右下に落ちる影 */
+  text-shadow:
+    0.04em 0 0 #fff, 0.028em 0.028em 0 #fff, 0 0.04em 0 #fff, -0.028em 0.028em 0 #fff,
+    -0.04em 0 0 #fff, -0.028em -0.028em 0 #fff, 0 -0.04em 0 #fff, 0.028em -0.028em 0 #fff,
+    0.05em 0.07em 0 var(--ink), 0.09em 0.13em 0 var(--ink);
+}
+.hx-shout-ch::after {
+  content: attr(data-c);
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: inherit;
+  -webkit-text-stroke: 0;
+  text-shadow: none;
+  /* 上半分が明るく、まん中で一段だけ濃くなる（つやの切れ目）。その上を白い光の筋が横切る */
+  background:
+    linear-gradient(105deg, rgba(255, 255, 255, 0) 42%, rgba(255, 255, 255, 0.9) 50%, rgba(255, 255, 255, 0) 58%) 130% 0 / 320% 100% no-repeat,
+    linear-gradient(180deg, var(--s1) 12%, var(--s2) 52%, var(--s3) 56%, var(--s2) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: hx-shout-shine 1.1s ease-in-out 0.9s infinite;
+}
+@keyframes hx-shout-shine {
+  0% { background-position: 130% 0, 0 0; }
+  60%, 100% { background-position: -30% 0, 0 0; }
+}
+.hx-shout-bang { margin-left: -0.04em; }
+/* 英字1文字だけの語（W ボーナス の W）：大きくして、色は白〜水色の1色あい */
+.hx-shout-big {
+  font-size: 1.4em;
+  --s1: #FFFFFF;
+  --s2: #7DF6FF;
+  --s3: #00C8E6;
+}
+/* 「スコア ×4」の札 */
+.hx-shout-sub {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3em;
+  padding: 0.12em 0.7em 0.16em;
+  font-family: "Mochiy Pop One", sans-serif;
+  line-height: 1.1;
+  white-space: nowrap;
+  color: #fff;
+  background: var(--ink);
+  border: 0.08em solid #fff;
+  border-radius: 0.35em;
+  box-shadow: 0.1em 0.14em 0 rgba(11, 3, 32, 0.55);
+  transform: skewX(-8deg);
+}
+.hx-shout-mult {
+  font-size: 1.5em;
+  color: var(--yellow);
+}
+
 /* FEVER 突入（2.4秒。GameScreen.tsx の CUTIN_MS と feverIntro の時間に合わせてある）
    暗転 → 虹の放射線が収束 → 帯が開く → ラビッドパが左右から突っ込む → 1文字ずつ叩きつけ → はじけて消える */
 .hx-fever-dim {
@@ -1025,6 +1111,54 @@ body {
 @keyframes hx-gold-text {
   from { color: #FFC400; text-shadow: 0 0 0.08em #FF8F00, 0 0 0.3em #FFC400; }
   to { color: #FFF8C4; text-shadow: 0 0 0.12em #FFE600, 0 0 0.6em #FFE600; }
+}
+/* 演出がふつう以上のとき：金の明滅に加えて、出た瞬間に弾んで着地し、そのあと鼓動する。
+   拡大方向だけなので、出題文字は下限（§3.1）より小さくならない */
+.hx-gold-text-max {
+  animation:
+    hx-gold-text 0.6s ease-in-out infinite alternate,
+    hx-gold-land 0.5s cubic-bezier(0.2, 1.6, 0.4, 1),
+    hx-gold-throb 0.3s ease-in-out 0.5s infinite alternate;
+}
+@keyframes hx-gold-land {
+  0% { transform: scale(1.2) rotate(-4deg); filter: brightness(2.2); }
+  55% { transform: scale(1) rotate(2deg); filter: brightness(1.3); }
+  100% { transform: scale(1.02) rotate(0deg); filter: brightness(1); }
+}
+@keyframes hx-gold-throb {
+  from { transform: scale(1); }
+  to { transform: scale(1.04); }
+}
+/* 枠の上下のテープも金色になって速く流れる */
+.hx-gold-border .hx-tape {
+  --tape: #FFF59D;
+  animation-duration: 0.3s;
+}
+.hx-gold-sweep {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(105deg, rgba(255, 230, 0, 0) 42%, rgba(255, 244, 157, 0.34) 50%, rgba(255, 230, 0, 0) 58%) 0 0 / 300% 100% no-repeat;
+  animation: hx-gold-sweep 1s linear infinite;
+}
+@keyframes hx-gold-sweep {
+  from { background-position: 150% 0; }
+  to { background-position: -50% 0; }
+}
+/* お知らせの帯：濃い金茶の地に金のふち。左から突っ込み、止まって、右へ抜ける（1.5秒 = ポップアップの寿命） */
+.hx-gold-band {
+  background: linear-gradient(90deg, #2A1600, #7A4B00, #2A1600);
+  border-color: #FFD600;
+  box-shadow: 0 0 0 5px var(--ink), 0 0 60px #FFC400;
+  animation: hx-gold-band 1.5s cubic-bezier(0.2, 1.2, 0.3, 1) forwards;
+}
+@keyframes hx-gold-band {
+  0% { transform: translateX(-125vw) skewY(-2deg); }
+  14% { transform: translateX(3vw) skewY(-2deg); }
+  22% { transform: translateX(0) skewY(-2deg) scaleY(1.12); }
+  30% { transform: translateX(0) skewY(-2deg) scaleY(1); }
+  82% { transform: translateX(0) skewY(-2deg); }
+  100% { transform: translateX(130vw) skewY(-2deg); }
 }
 .hx-gold-border {
   animation: hx-gold-border 0.5s ease-in-out infinite alternate;

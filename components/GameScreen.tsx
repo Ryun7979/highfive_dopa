@@ -15,6 +15,7 @@ import EffectCanvas, { EffectHandle, RAINBOW } from './EffectCanvas';
 import DopaBackground from './DopaBackground';
 import Rabidopa, { RabidopaHandle } from './Rabidopa';
 import StartCountdown from './StartCountdown';
+import { ShoutText, ShoutSub } from './ShoutText';
 
 // タイマー表示専用コンポーネント。親のリ描画を抑える。
 // limitMs を渡すと残り時間のカウントダウンになる（アーケードモード）。
@@ -105,11 +106,13 @@ const FEVER_AMBIENT = [70, 120, 170, 220];        // 下からわくキラキラ
 const FEVER_EDGE_WIDTH = ['18px', '24px', '30px', '38px'];
 const FEVER_EDGE_SPEED = ['0.5s', '0.35s', '0.25s', '0.16s'];
 const FEVER_TICK_MS = 50;                         // ゲージを減らす間隔
+// ゴールデンワードのあいだ、下からわくキラキラ（1秒あたり）
+const GOLDEN_AMBIENT = 30;
 const FEVER_TICKER = Array.from({ length: 14 }, () => 'FEVER!!').join(' ★ ');
 
 interface Popup {
   id: number;
-  kind: 'word' | 'banner';
+  kind: 'word' | 'banner' | 'golden';
   text: string;
   sub?: string;
   perfect?: boolean;
@@ -572,14 +575,26 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
     setIsGolden(g.golden);
     if (g.golden) {
       audioManager.playGolden();
-      addPopup({ kind: 'banner', text: 'ゴールデンワード!!', sub: 'クリアで ボーナスタイム！' });
+      addPopup({ kind: calm ? 'banner' : 'golden', text: 'ゴールデンワード!!', sub: 'クリアで ボーナスタイム！' });
+      if (!calm) {
+        // 出た瞬間の「ドン」。金のフラッシュ・輪・はじけ・ゆれ（文字の着地は CSS の hx-gold-text-max）
+        const fx = fxRef.current;
+        const W = window.innerWidth, H = window.innerHeight;
+        fx?.flash('#FFD600', 0.35 * fxScale);
+        fx?.ring(W / 2, H / 2, '#FFD600');
+        fx?.ring(W / 2, H / 2, '#FFF8C4');
+        fx?.burst(W / 2, H / 2, 40, 1.8);
+        fx?.confetti(30);
+        shake(10, 300);
+        zoomPulse(1.05);
+      }
     }
 
     setMoras(parsed);
     setCurrentMoraIndex(0);
     setTypedMoraInput("");
     updateHintKey(parsed, 0, "");
-  }, [updateHintKey, addPopup, mods.goldenRate]);
+  }, [updateHintKey, addPopup, calm, fxScale, shake, zoomPulse, mods.goldenRate]);
 
   useEffect(() => {
     wordsQueueRef.current = words;
@@ -1068,6 +1083,8 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
               {/* 上下のふちを走るテープ。文字にはかからない */}
               <div className={`hx-tape top-0 ${calm ? 'dopa-calm' : ''}`} />
               <div className={`hx-tape bottom-0 ${calm ? 'dopa-calm' : ''}`} />
+              {/* ゴールデンワード：枠の中を光の筋が横切る。文字の下の層 */}
+              {isGolden && !calm && <div className="hx-gold-sweep" />}
               <div className="relative z-10 w-full max-w-[95%] mx-auto">
                  {!started ? null : isWaitingForWord || !currentWord ? (
                    <div className="flex flex-col items-center justify-center animate-pulse py-12">
@@ -1078,7 +1095,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
                    <div className="flex flex-col items-center justify-center space-y-8 w-full">
                       <div
                         ref={kanaRef}
-                        className={`text-white font-black ${fontClass} tracking-wider text-center break-keep leading-tight drop-shadow-[4px_4px_0px_rgba(0,0,0,0.5)] ${kanaSize} ${isGolden ? 'hx-gold-text' : isFever ? 'dopa-rainbow-text' : ''}`}
+                        className={`text-white font-black ${fontClass} tracking-wider text-center break-keep leading-tight drop-shadow-[4px_4px_0px_rgba(0,0,0,0.5)] ${kanaSize} ${isGolden ? (calm ? 'hx-gold-text' : 'hx-gold-text-max') : isFever ? 'dopa-rainbow-text' : ''}`}
                         style={{ '--chars': currentWord.text.length } as React.CSSProperties}
                       >
                         {currentWord.text}
@@ -1173,7 +1190,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
       </div>
 
       {/* レイヤー3: 演出（Canvas） */}
-      <EffectCanvas ref={fxRef} maxParticles={calm ? 150 : isFever ? 450 : 300} ambient={calm ? 0 : counting ? 36 : isFever ? FEVER_AMBIENT[feverIdx] : AMBIENT_PER_SEC[tier.level]} />
+      <EffectCanvas ref={fxRef} maxParticles={calm ? 150 : isFever ? 450 : 300} ambient={calm ? 0 : counting ? 36 : Math.max(isGolden ? GOLDEN_AMBIENT : 0, isFever ? FEVER_AMBIENT[feverIdx] : AMBIENT_PER_SEC[tier.level])} />
 
       {/* 画面のふちを走るネオン。コンボ段階で太く速くなる */}
       {!calm && (
@@ -1217,8 +1234,8 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
               <div className="hx-cutin-speed" />
               <Rabidopa anim="fever" aura={4} rainbow className="relative h-[24vh] aspect-[720/700] -mt-[6vh] shrink-0" />
               <div className="relative text-center">
-                <div className="hx-sticker text-white text-[5vw] leading-none whitespace-nowrap">{cutin.text}</div>
-                {cutin.sub && <div className="hx-num hx-sticker text-neon-yellow text-3xl md:text-5xl leading-none whitespace-nowrap mt-1">{cutin.sub}</div>}
+                <ShoutText text={cutin.text} className="text-[4.4vw]" />
+                {cutin.sub && <div className="mt-[0.4vw]"><ShoutSub text={cutin.sub} className="text-xl md:text-3xl" /></div>}
               </div>
               <Rabidopa anim="fever" aura={4} rainbow className="relative h-[24vh] aspect-[720/700] -mt-[6vh] shrink-0" />
             </div>
@@ -1247,8 +1264,8 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
                 <div className="hx-cutin-speed" />
                 <Rabidopa anim="shout" aura={4} className="relative h-[36vh] aspect-[720/700] -mt-[6vh] shrink-0" />
                 <div className="relative hx-cutin-slam text-center">
-                  <div className="hx-sticker text-white text-[6.5vw] leading-none whitespace-nowrap">{cutin.text}</div>
-                  {cutin.sub && <div className="hx-sticker text-neon-yellow text-3xl md:text-6xl whitespace-nowrap">{cutin.sub}</div>}
+                  <ShoutText text={cutin.text} tone="pink" className="text-[6vw]" />
+                  {cutin.sub && <div className="mt-[1vw]"><ShoutSub text={cutin.sub} className="text-2xl md:text-5xl" /></div>}
                 </div>
                 <Rabidopa anim="shout" aura={4} className="relative h-[36vh] aspect-[720/700] -mt-[6vh] shrink-0" />
               </div>
@@ -1260,8 +1277,8 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
                 <div className="hx-fever-rays" />
               </div>
               {/* 上下を逆向きに流れる文字の帯 */}
-              <div className="hx-fever-ticker top-[5vh]"><div className="hx-num hx-sticker hx-fever-ticker-in">{FEVER_TICKER}</div></div>
-              <div className="hx-fever-ticker bottom-[5vh]"><div className="hx-num hx-sticker hx-fever-ticker-in hx-fever-ticker-rev">{FEVER_TICKER}</div></div>
+              <div className="hx-fever-ticker top-[5vh]"><div className="hx-sticker hx-fever-ticker-in">{FEVER_TICKER}</div></div>
+              <div className="hx-fever-ticker bottom-[5vh]"><div className="hx-sticker hx-fever-ticker-in hx-fever-ticker-rev">{FEVER_TICKER}</div></div>
               <div className="hx-cutin-band hx-fever-band top-[26vh] h-[48vh] dopa-rainbow-fill">
                 <div className="hx-cutin-speed" />
                 {/* ラビッドパが左右から突っ込んできて、とびはねつづける */}
@@ -1272,12 +1289,8 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
                 </div>
                 <div className="relative text-center">
                   {/* 1文字ずつ叩きつける */}
-                  <div className="hx-num hx-sticker text-white leading-none whitespace-nowrap" style={{ fontSize: `${cutin.text.length > 7 ? 7 : 10}vw` }}>
-                    {cutin.text.split('').map((c, i) => (
-                      <span key={i} className="hx-fever-letter" style={{ animationDelay: `${0.4 + i * 0.08}s` }}>{c === ' ' ? ' ' : c}</span>
-                    ))}
-                  </div>
-                  {cutin.sub && <div className="hx-sticker hx-fever-sub text-neon-yellow text-3xl md:text-6xl whitespace-nowrap">{cutin.sub}</div>}
+                  <ShoutText text={cutin.text} letterClass="hx-fever-letter" delay={0.4} step={0.08} style={{ fontSize: `${cutin.text.length > 7 ? 7 : 9}vw` }} />
+                  {cutin.sub && <div className="hx-fever-sub mt-[1.2vw]"><ShoutSub text={cutin.sub} className="text-2xl md:text-5xl" /></div>}
                 </div>
                 <div className="relative shrink-0 hx-fever-rush-r">
                   <div className="hx-fever-hop">
@@ -1297,6 +1310,18 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
             <div className={`dopa-pop-word hx-num hx-sticker text-7xl md:text-9xl ${p.perfect ? 'dopa-rainbow-text' : 'text-neon-yellow'}`}>
               {p.text}
             </div>
+          </div>
+        ) : p.kind === 'golden' ? (
+          // ゴールデンワードのお知らせ。画面の下を金の帯が走る（出題にはかぶせない）
+          <div key={p.id} className="hx-cutin-band hx-gold-band bottom-0 h-[13vh]">
+            <div className="hx-cutin-speed" />
+            {/* ラビッドパは帯の中に収める（耳が出題エリアにかからないように） */}
+            <Rabidopa anim="shout" className="relative h-[14vh] aspect-[720/700] -mt-[3vh] shrink-0" />
+            <div className="relative text-center">
+              <ShoutText text={p.text} className="text-[3.8vw]" letterClass="hx-fever-letter" delay={0.18} step={0.04} />
+              {p.sub && <div className="mt-[0.2vw]"><ShoutSub text={p.sub} className="text-base md:text-xl" /></div>}
+            </div>
+            <Rabidopa anim="shout" className="relative h-[14vh] aspect-[720/700] -mt-[3vh] shrink-0" />
           </div>
         ) : (
           <div key={p.id} className="absolute inset-x-0 bottom-[2vh] flex justify-center">
