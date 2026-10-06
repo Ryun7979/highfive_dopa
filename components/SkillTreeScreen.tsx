@@ -5,6 +5,7 @@ import { EffectLevel, loadSave } from '../utils/saveData';
 import { expToNext } from '../utils/progression';
 import { SKILL_BRANCHES, SKILL_NODES, SkillBranch, SkillNode, getSkillState, resetSkills, unlockSkill } from '../utils/skills';
 import DopaBackground from './DopaBackground';
+import FitScreen from './FitScreen';
 import EffectCanvas, { EffectHandle } from './EffectCanvas';
 import Rabidopa, { RabidopaHandle } from './Rabidopa';
 
@@ -55,12 +56,33 @@ const SkillTreeScreen: React.FC<SkillTreeScreenProps> = ({ effectLevel = 'max', 
     setSave(resetSkills());
   };
 
+  // 操作ボタンは画面の下に固定する（中身がスクロールになっても押せるように）
+  const footer = (
+    <>
+      <button
+        onClick={() => { audioManager.playCancel(); onBack(); }}
+        className="hx-btn hx-red px-12 py-3 text-2xl md:text-3xl"
+      >
+        <span className="hx-btn-in">
+          <ArrowLeft className="w-8 h-8 mr-3" strokeWidth={3} />
+          <span className="hx-sticker">もどる</span>
+        </span>
+      </button>
+      <button onClick={handleReset} className="hx-btn hx-dark px-6 py-3 text-lg md:text-xl">
+        <span className="hx-btn-in">
+          <RotateCcw className="w-6 h-6 mr-2" strokeWidth={3} />
+          ふりなおす（タダ）
+        </span>
+      </button>
+    </>
+  );
+
   return (
     <div className="relative min-h-screen w-full overflow-hidden">
       <DopaBackground level={2} calm={calm} />
       <EffectCanvas ref={fxRef} maxParticles={calm ? 150 : 300} ambient={calm ? 0 : 8} />
-      <div className="relative z-30 h-screen overflow-y-auto overflow-x-hidden dopa-scroll flex flex-col items-center p-5 pt-10 md:p-8 md:pt-12 animate-fade-in w-full font-pop">
-        <div className="hx-panel w-full max-w-7xl my-auto p-5 md:p-8" style={{ '--edge': 'var(--yellow)' } as React.CSSProperties}>
+      <FitScreen className="relative z-30 animate-fade-in font-pop" footer={footer} innerClassName="flex flex-col items-center p-5 pt-10 md:p-8 md:pt-12">
+        <div className="hx-panel w-full max-w-[1600px] p-5 md:p-8" style={{ '--edge': 'var(--yellow)' } as React.CSSProperties}>
           <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2">
             <div className="hx-skew dopa-rainbow-fill border-[5px] border-neon-ink rounded-2xl px-12 py-2 shadow-[8px_9px_0_#0B0320] whitespace-nowrap">
               <h2 className="hx-unskew hx-sticker text-white text-3xl md:text-5xl tracking-wider leading-none">スキルツリー</h2>
@@ -82,7 +104,7 @@ const SkillTreeScreen: React.FC<SkillTreeScreenProps> = ({ effectLevel = 'max', 
                   <div className="hx-gauge h-4">
                     <div className="h-full dopa-gauge-fill" style={{ width: `${Math.min(100, (player.exp / expToNext(player.level)) * 100)}%` }} />
                   </div>
-                  <div className="text-xs md:text-sm text-neon-cyan whitespace-nowrap">つぎの レベルまで {expToNext(player.level) - player.exp} EXP</div>
+                  <div className="mt-3 text-xs md:text-sm text-neon-cyan whitespace-nowrap">つぎの レベルまで {expToNext(player.level) - player.exp} EXP</div>
                 </div>
               </div>
             </div>
@@ -99,18 +121,18 @@ const SkillTreeScreen: React.FC<SkillTreeScreenProps> = ({ effectLevel = 'max', 
           </div>
 
           {/* 3本の枝 */}
-          <div className="mt-5 grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="mt-5 grid grid-cols-1 lg:grid-cols-4 gap-4">
             {SKILL_BRANCHES.map(branch => {
               const style = BRANCH_STYLE[branch.id];
               return (
-                <div key={branch.id} className="bg-neon-ink/50 rounded-2xl border-4 border-neon-ink p-3 pb-5">
+                <div key={branch.id} className={`bg-neon-ink/50 rounded-2xl border-4 border-neon-ink p-3 pb-5 ${branch.id === 'boost' ? 'lg:col-span-2' : ''}`}>
                   <div className="flex items-center gap-3 mb-3">
                     <div className="hx-tag px-4 py-0.5" style={{ '--edge': style.edge } as React.CSSProperties}>
                       <span className={`hx-unskew text-xl md:text-2xl ${style.text}`}>{branch.label}</span>
                     </div>
                     <span className="text-sm md:text-base text-white/70">{branch.desc}</span>
                   </div>
-                  <div className="flex flex-col gap-4 px-2">
+                  <div className={`grid grid-cols-1 gap-4 px-2 ${branch.id === 'boost' ? 'lg:grid-cols-2 lg:grid-rows-4 lg:grid-flow-col lg:gap-x-6' : ''}`}>
                     {SKILL_NODES.filter(n => n.branch === branch.id).map(node => {
                       const state = getSkillState(node, skills);
                       const affordable = state === 'open' && player.sp >= node.cost;
@@ -144,26 +166,8 @@ const SkillTreeScreen: React.FC<SkillTreeScreenProps> = ({ effectLevel = 'max', 
               );
             })}
           </div>
-
-          <div className="mt-6 mb-2 flex flex-wrap items-center justify-center gap-6">
-            <button
-              onClick={() => { audioManager.playCancel(); onBack(); }}
-              className="hx-btn hx-red px-12 py-3 text-2xl md:text-3xl"
-            >
-              <span className="hx-btn-in">
-                <ArrowLeft className="w-8 h-8 mr-3" strokeWidth={3} />
-                <span className="hx-sticker">もどる</span>
-              </span>
-            </button>
-            <button onClick={handleReset} className="hx-btn hx-dark px-6 py-3 text-lg md:text-xl">
-              <span className="hx-btn-in">
-                <RotateCcw className="w-6 h-6 mr-2" strokeWidth={3} />
-                ふりなおす（タダ）
-              </span>
-            </button>
-          </div>
         </div>
-      </div>
+      </FitScreen>
     </div>
   );
 };

@@ -9,6 +9,7 @@ import { GACHA_COST } from '../utils/gacha';
 import { expToNext } from '../utils/progression';
 import { isDifficultyUnlocked } from '../utils/skills';
 import DopaBackground from './DopaBackground';
+import FitScreen from './FitScreen';
 import EffectCanvas, { EffectHandle } from './EffectCanvas';
 import Rabidopa, { RabidopaHandle } from './Rabidopa';
 
@@ -102,8 +103,8 @@ const TitleScreen: React.FC<TitleScreenProps> = ({ initialMode = 'practice', eff
       <DopaBackground level={0} calm={calm} />
       <EffectCanvas ref={fxRef} maxParticles={calm ? 150 : 300} ambient={calm ? 0 : 10} />
 
-      <div className="relative z-30 h-screen overflow-y-auto overflow-x-hidden dopa-scroll">
-        <div className="relative flex flex-col items-center justify-center min-h-full text-center px-5 md:px-10 pt-4 pb-16 gap-4 md:gap-5 animate-fade-in w-full max-w-7xl mx-auto font-pop">
+      <FitScreen className="relative z-30" reserveBottom={72}>
+        <div className="relative flex flex-col items-center justify-center text-center px-5 md:px-10 pt-4 pb-3 gap-4 md:gap-5 animate-fade-in w-full max-w-[1600px] mx-auto font-pop">
 
           {/* おとの大きさ / オプション */}
           <div className="absolute top-3 right-3 md:top-5 md:right-6 z-20 flex items-center gap-4">
@@ -213,7 +214,7 @@ const TitleScreen: React.FC<TitleScreenProps> = ({ initialMode = 'practice', eff
                       <m.icon className="w-10 h-10 md:w-14 md:h-14" strokeWidth={3} />
                       <span className="text-left">
                         <span className={`block text-2xl md:text-4xl whitespace-nowrap ${isActive ? 'hx-sticker' : ''}`}>{m.label}</span>
-                        <span className="block text-base md:text-xl whitespace-nowrap">{m.desc}</span>
+                        <span className="block mt-1 text-base md:text-xl whitespace-nowrap">{m.desc}</span>
                       </span>
                       {isActive && (
                         <span className="ml-2 flex items-center justify-center w-10 h-10 md:w-12 md:h-12 rounded-full bg-neon-ink text-neon-yellow border-4 border-white dopa-throb">
@@ -336,13 +337,13 @@ const TitleScreen: React.FC<TitleScreenProps> = ({ initialMode = 'practice', eff
           {/* Discrete Dev Settings Entry */}
           <button
             onClick={onOpenSettings}
-            className="absolute right-2 bottom-16 p-2 text-white/30 hover:text-white hover:bg-white/20 rounded-full transition-all duration-300"
+            className="absolute right-2 bottom-1 p-2 text-white/30 hover:text-white hover:bg-white/20 rounded-full transition-all duration-300"
             title="Dev Settings"
           >
             <Settings size={22} />
           </button>
         </div>
-      </div>
+      </FitScreen>
 
       {/* 下を流れる帯 */}
       <div className="fixed bottom-2 inset-x-0 z-30 pointer-events-none">

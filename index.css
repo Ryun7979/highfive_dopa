@@ -83,7 +83,9 @@ body {
   text-shadow: 0 0.1em 0 var(--ink), 0.04em 0.15em 0 var(--ink);
 }
 .hx-skew { transform: skewX(-8deg); }
-.hx-unskew { transform: skewX(8deg); display: block; }
+.hx-unskew { transform: skewX(8deg); }
+/* flex / grid を指定した入れ物では、その並べ方を打ち消さない */
+.hx-unskew:not(.flex):not(.grid) { display: block; }
 
 /* パネル：夜色の板＋ネオンの縁＋段差の影。--edge で縁の色を変える */
 .hx-panel {

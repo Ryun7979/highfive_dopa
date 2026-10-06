@@ -5,6 +5,7 @@ import { SHARDS_TO_EXCHANGE, exchangeShards } from '../utils/gacha';
 import { CATEGORIES, ITEMS, ItemDef, equipItem, equippedItem, isOwned } from '../utils/items';
 import { EffectLevel, loadSave } from '../utils/saveData';
 import DopaBackground from './DopaBackground';
+import FitScreen from './FitScreen';
 import EffectCanvas, { EffectHandle } from './EffectCanvas';
 import ItemIcon, { RarityBadge } from './ItemIcon';
 import Rabidopa, { RabidopaHandle } from './Rabidopa';
@@ -61,11 +62,29 @@ const CollectionScreen: React.FC<CollectionScreenProps> = ({ effectLevel = 'max'
     tryOut(item, e);
   };
 
+  // 操作ボタンは画面の下に固定する（中身がスクロールになっても押せるように）
+  const footer = (
+    <>
+      <button onClick={() => { audioManager.playCancel(); onBack(); }} className="hx-btn hx-red px-12 py-3 text-2xl md:text-3xl">
+        <span className="hx-btn-in whitespace-nowrap">
+          <ArrowLeft className="w-8 h-8 mr-3" strokeWidth={3} />
+          <span className="hx-sticker">もどる</span>
+        </span>
+      </button>
+      <button onClick={() => { audioManager.playSelect(); onOpenGacha(); }} className="hx-btn hx-yellow px-7 py-3 text-xl md:text-2xl">
+        <span className="hx-btn-in whitespace-nowrap">
+          <Gift className="w-7 h-7 mr-2" strokeWidth={3} />
+          ガチャへ
+        </span>
+      </button>
+    </>
+  );
+
   return (
     <div className="relative min-h-screen w-full overflow-hidden">
       <DopaBackground level={0} calm={calm} theme={equipped.bg} />
       <EffectCanvas ref={fxRef} maxParticles={calm ? 150 : 300} ambient={calm ? 0 : 8} effect={equipped.effect} />
-      <div className="relative z-30 h-screen overflow-y-auto overflow-x-hidden dopa-scroll flex flex-col items-center p-5 pt-10 md:p-8 md:pt-12 animate-fade-in w-full font-pop">
+      <FitScreen className="relative z-30 animate-fade-in font-pop" footer={footer} innerClassName="flex flex-col items-center p-5 pt-10 md:p-8 md:pt-12">
         <div className="hx-panel w-full max-w-7xl my-auto p-5 md:p-8" style={{ '--edge': 'var(--cyan)' } as React.CSSProperties}>
           <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2">
             <div className="hx-skew dopa-rainbow-fill border-[5px] border-neon-ink rounded-2xl px-12 py-2 shadow-[8px_9px_0_#0B0320] whitespace-nowrap">
@@ -140,23 +159,8 @@ const CollectionScreen: React.FC<CollectionScreenProps> = ({ effectLevel = 'max'
               );
             })}
           </div>
-
-          <div className="mt-6 mb-2 flex flex-wrap items-center justify-center gap-6">
-            <button onClick={() => { audioManager.playCancel(); onBack(); }} className="hx-btn hx-red px-12 py-3 text-2xl md:text-3xl">
-              <span className="hx-btn-in whitespace-nowrap">
-                <ArrowLeft className="w-8 h-8 mr-3" strokeWidth={3} />
-                <span className="hx-sticker">もどる</span>
-              </span>
-            </button>
-            <button onClick={() => { audioManager.playSelect(); onOpenGacha(); }} className="hx-btn hx-yellow px-7 py-3 text-xl md:text-2xl">
-              <span className="hx-btn-in whitespace-nowrap">
-                <Gift className="w-7 h-7 mr-2" strokeWidth={3} />
-                ガチャへ
-              </span>
-            </button>
-          </div>
         </div>
-      </div>
+      </FitScreen>
     </div>
   );
 };

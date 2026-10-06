@@ -30,11 +30,11 @@ export const SKILL_NODES: SkillNode[] = [
   { id: 'fever_1', branch: 'boost', label: 'FEVER えんちょう 1', desc: 'FEVER が 1びょう ながくなる', cost: 1 },
   { id: 'fever_2', branch: 'boost', label: 'FEVER えんちょう 2', desc: 'FEVER が さらに 1びょう ながくなる', cost: 2, requires: 'fever_1' },
   { id: 'fever_3', branch: 'boost', label: 'FEVER えんちょう 3', desc: 'FEVER が さらに 1びょう ながくなる', cost: 3, requires: 'fever_2' },
+  { id: 'gauge_guard', branch: 'boost', label: 'ゲージまもり', desc: 'ミスしても ゲージが へりにくい', cost: 3, requires: 'fever_1' },
   { id: 'golden_1', branch: 'boost', label: 'ゴールデン アップ 1', desc: 'ゴールデンワードが でやすくなる', cost: 1 },
   { id: 'golden_2', branch: 'boost', label: 'ゴールデン アップ 2', desc: 'ゴールデンワードが もっと でやすくなる', cost: 2, requires: 'golden_1' },
   { id: 'golden_3', branch: 'boost', label: 'ゴールデン アップ 3', desc: 'ゴールデンワードが すごく でやすくなる', cost: 3, requires: 'golden_2' },
   { id: 'bonus_long', branch: 'boost', label: 'ボーナス えんちょう', desc: 'ボーナスタイムが 5びょう ながくなる', cost: 2, requires: 'golden_1' },
-  { id: 'gauge_guard', branch: 'boost', label: 'ゲージまもり', desc: 'ミスしても ゲージが へりにくい', cost: 3, requires: 'fever_1' },
 
   { id: 'lucky', branch: 'fx', label: 'ラッキーえんしゅつ', desc: 'クリアで ときどき スペシャルな はなび', cost: 1 },
   { id: 'scale', branch: 'fx', label: 'おんかい ついか', desc: 'うつ おとを わふう・ゲームふうに かえられる', cost: 1 },

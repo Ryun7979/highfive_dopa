@@ -5,6 +5,7 @@ import { FontType, getSettings, saveSettings } from '../utils/settingsManager';
 import { BreakMinutes, EffectLevel, ScalePattern, TextSize, loadSave, updateGameSettings } from '../utils/saveData';
 import { getMods } from '../utils/skills';
 import DopaBackground from './DopaBackground';
+import FitScreen from './FitScreen';
 
 interface OptionsScreenProps {
   onBack: () => void;
@@ -116,10 +117,25 @@ const OptionsScreen: React.FC<OptionsScreenProps> = ({ onBack }) => {
     setFontType(next);
   };
 
+  // 操作ボタンは画面の下に固定する（中身がスクロールになっても押せるように）
+  const footer = (
+    <>
+      <button
+        onClick={() => { audioManager.playCancel(); onBack(); }}
+        className="hx-btn hx-red px-12 py-3 text-2xl md:text-3xl"
+      >
+        <span className="hx-btn-in">
+          <ArrowLeft className="w-8 h-8 mr-3" strokeWidth={3} />
+          <span className="hx-sticker">もどる</span>
+        </span>
+      </button>
+    </>
+  );
+
   return (
     <div className="relative min-h-screen w-full overflow-hidden">
       <DopaBackground level={1} calm={settings.effectLevel === 'low'} />
-      <div className="relative z-10 h-screen overflow-y-auto overflow-x-hidden dopa-scroll flex flex-col items-center p-5 pt-10 md:p-8 md:pt-12 animate-fade-in w-full font-pop">
+      <FitScreen className="relative z-10 animate-fade-in font-pop" footer={footer} innerClassName="flex flex-col items-center p-5 pt-10 md:p-8 md:pt-12">
         <div className="hx-panel w-full max-w-6xl my-auto p-5 md:p-8" style={{ '--edge': 'var(--purple)' } as React.CSSProperties}>
           <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2">
             <div className="hx-skew dopa-rainbow-fill border-[5px] border-neon-ink rounded-2xl px-12 py-2 shadow-[8px_9px_0_#0B0320] whitespace-nowrap">
@@ -139,20 +155,8 @@ const OptionsScreen: React.FC<OptionsScreenProps> = ({ onBack }) => {
               <ChoiceRow title="うつ おとの おんかい" color="hx-orange" edge="var(--orange)" choices={SCALE_CHOICES} value={settings.scale} onChange={changeScale} />
             )}
           </div>
-
-          <div className="mt-6 mb-2 flex justify-center">
-            <button
-              onClick={() => { audioManager.playCancel(); onBack(); }}
-              className="hx-btn hx-red px-12 py-3 text-2xl md:text-3xl"
-            >
-              <span className="hx-btn-in">
-                <ArrowLeft className="w-8 h-8 mr-3" strokeWidth={3} />
-                <span className="hx-sticker">もどる</span>
-              </span>
-            </button>
-          </div>
         </div>
-      </div>
+      </FitScreen>
     </div>
   );
 };

@@ -5,6 +5,7 @@ import { GACHA_COST, GACHA_PITY, GACHA_RATES, GachaResult, SHARDS_TO_EXCHANGE, p
 import { RARITIES } from '../utils/items';
 import { EffectLevel, loadSave } from '../utils/saveData';
 import DopaBackground from './DopaBackground';
+import FitScreen from './FitScreen';
 import EffectCanvas, { EffectHandle } from './EffectCanvas';
 import ItemIcon, { RARITY_STYLE, RarityBadge } from './ItemIcon';
 import Rabidopa, { RabidopaHandle } from './Rabidopa';
@@ -72,11 +73,40 @@ const GachaScreen: React.FC<GachaScreenProps> = ({ effectLevel = 'max', onBack, 
 
   const high = result && RARITIES.indexOf(result.item.rarity) >= 2;
 
+  // 操作ボタンは画面の下に固定する（中身がスクロールになっても押せるように）
+  const footer = (
+    <>
+      <div className={canPull && !calm ? 'dopa-throb' : ''}>
+        <button onClick={handlePull} className={`hx-btn ${canPull ? 'hx-yellow' : 'hx-off'} px-10 py-4 text-2xl md:text-4xl`}>
+          <span className="hx-btn-in whitespace-nowrap">
+            <Gift className="w-9 h-9 mr-3" strokeWidth={3} />
+            <span className={canPull ? 'hx-sticker' : ''}>{player.coins >= GACHA_COST ? 'ガチャを まわす！' : 'コインが たりない…'}</span>
+            <span className="ml-4 flex items-center gap-1 text-lg md:text-xl bg-neon-ink/60 rounded-lg px-3 py-1 whitespace-nowrap">
+              <Coins size={20} /> {GACHA_COST}
+            </span>
+          </span>
+        </button>
+      </div>
+      <button onClick={() => { audioManager.playSelect(); onOpenCollection(); }} className="hx-btn hx-cyan px-7 py-3 text-xl md:text-2xl">
+        <span className="hx-btn-in whitespace-nowrap">
+          <BookOpen className="w-7 h-7 mr-2" strokeWidth={3} />
+          ずかんへ
+        </span>
+      </button>
+      <button onClick={() => { audioManager.playCancel(); onBack(); }} className="hx-btn hx-red px-7 py-3 text-xl md:text-2xl">
+        <span className="hx-btn-in whitespace-nowrap">
+          <ArrowLeft className="w-7 h-7 mr-2" strokeWidth={3} />
+          もどる
+        </span>
+      </button>
+    </>
+  );
+
   return (
     <div className="relative min-h-screen w-full overflow-hidden">
       <DopaBackground level={high ? 3 : 1} fever={!!result && result.item.rarity === 'SSR'} calm={calm} />
       <EffectCanvas ref={fxRef} maxParticles={calm ? 150 : 300} ambient={calm ? 0 : 8} />
-      <div className="relative z-30 h-screen overflow-y-auto overflow-x-hidden dopa-scroll flex flex-col items-center p-5 pt-10 md:p-8 md:pt-12 animate-fade-in w-full font-pop">
+      <FitScreen className="relative z-30 animate-fade-in font-pop" footer={footer} innerClassName="flex flex-col items-center p-5 pt-10 md:p-8 md:pt-12">
         <div className="hx-panel w-full max-w-5xl my-auto p-5 md:p-8" style={{ '--edge': 'var(--orange)' } as React.CSSProperties}>
           <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2">
             <div className="hx-skew dopa-rainbow-fill border-[5px] border-neon-ink rounded-2xl px-12 py-2 shadow-[8px_9px_0_#0B0320] whitespace-nowrap">
@@ -165,34 +195,8 @@ const GachaScreen: React.FC<GachaScreenProps> = ({ effectLevel = 'max', onBack, 
               <span className="text-white/70">　おなじ ものは かけらに なり、{SHARDS_TO_EXCHANGE}こで すきな アイテムと こうかん</span>
             </div>
           </div>
-
-          <div className="mt-5 mb-2 flex flex-col md:flex-row items-center justify-center gap-6 md:gap-8">
-            <div className={canPull && !calm ? 'dopa-throb' : ''}>
-              <button onClick={handlePull} className={`hx-btn ${canPull ? 'hx-yellow' : 'hx-off'} px-10 py-4 text-2xl md:text-4xl`}>
-                <span className="hx-btn-in whitespace-nowrap">
-                  <Gift className="w-9 h-9 mr-3" strokeWidth={3} />
-                  <span className={canPull ? 'hx-sticker' : ''}>{player.coins >= GACHA_COST ? 'ガチャを まわす！' : 'コインが たりない…'}</span>
-                  <span className="ml-4 flex items-center gap-1 text-lg md:text-xl bg-neon-ink/60 rounded-lg px-3 py-1 whitespace-nowrap">
-                    <Coins size={20} /> {GACHA_COST}
-                  </span>
-                </span>
-              </button>
-            </div>
-            <button onClick={() => { audioManager.playSelect(); onOpenCollection(); }} className="hx-btn hx-cyan px-7 py-3 text-xl md:text-2xl">
-              <span className="hx-btn-in whitespace-nowrap">
-                <BookOpen className="w-7 h-7 mr-2" strokeWidth={3} />
-                ずかんへ
-              </span>
-            </button>
-            <button onClick={() => { audioManager.playCancel(); onBack(); }} className="hx-btn hx-red px-7 py-3 text-xl md:text-2xl">
-              <span className="hx-btn-in whitespace-nowrap">
-                <ArrowLeft className="w-7 h-7 mr-2" strokeWidth={3} />
-                もどる
-              </span>
-            </button>
-          </div>
         </div>
-      </div>
+      </FitScreen>
     </div>
   );
 };

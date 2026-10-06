@@ -64,7 +64,7 @@ const ItemIcon: React.FC<ItemIconProps> = ({ item, locked = false, className = '
   return (
     <div className={`relative aspect-square ${className}`}>
       <div className="absolute inset-0" style={locked ? { filter: 'brightness(0)', opacity: 0.55 } : undefined}>{body}</div>
-      {locked && <span className="absolute inset-0 flex items-center justify-center hx-num hx-sticker text-white text-4xl md:text-5xl">?</span>}
+      {locked && <span className="absolute inset-0 flex items-center justify-center hx-num hx-sticker text-white text-3xl md:text-4xl pt-3">?</span>}
     </div>
   );
 };

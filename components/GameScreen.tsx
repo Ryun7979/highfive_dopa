@@ -700,7 +700,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
               <div className="hx-unskew text-center">
                 {mode === 'practice' ? (
                   <>
-                    <div className="text-xs md:text-sm text-neon-lime leading-none">もんだい</div>
+                    <div className="text-xs md:text-sm text-neon-lime leading-none mb-1.5 md:mb-2.5">もんだい</div>
                     <div className="flex items-baseline justify-center">
                       <span className="hx-num text-3xl md:text-5xl text-white leading-none">{Math.min(currentWordIndex + 1, TOTAL_QUESTIONS)}</span>
                       <span className="hx-num text-lg md:text-2xl text-white/60">/{TOTAL_QUESTIONS}</span>
@@ -713,8 +713,8 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
                   </>
                 ) : (
                   <>
-                    <div className="text-xs md:text-sm text-neon-lime leading-none">クリア</div>
-                    <div key={hud.words} className="hx-num dopa-combo-pop text-4xl md:text-6xl text-white leading-none">{hud.words}</div>
+                    <div className="text-xs md:text-sm text-neon-lime leading-none mb-1.5 md:mb-2.5">クリア</div>
+                    <div key={hud.words} className="hx-num dopa-combo-pop origin-top text-4xl md:text-6xl text-white leading-none">{hud.words}</div>
                   </>
                 )}
               </div>
@@ -725,13 +725,13 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
             <div className={`hx-tag px-5 lg:px-12 py-1 md:py-2 ${isFever ? 'dopa-rainbow-border' : ''}`}>
               <div className="hx-unskew text-center">
                 {rival === null ? (
-                  <div className="text-xs md:text-base text-neon-cyan tracking-[0.4em] leading-none">SCORE</div>
+                  <div className="text-xs md:text-base text-neon-cyan tracking-[0.4em] leading-none mb-1.5 md:mb-2.5">SCORE</div>
                 ) : (
-                  <div className={`hx-num text-xs md:text-base leading-none whitespace-nowrap ${rival >= 0 ? "text-neon-lime" : "text-neon-red"}`}>
+                  <div className={`hx-num text-xs md:text-base leading-none mb-1.5 md:mb-2.5 whitespace-nowrap ${rival >= 0 ? "text-neon-lime" : "text-neon-red"}`}>
                     ゴースト {rival >= 0 ? "+" : "−"}{Math.abs(rival).toLocaleString()}
                   </div>
                 )}
-                <div key={hud.score} className={`hx-num dopa-combo-pop text-4xl md:text-6xl leading-none ${isFever ? 'dopa-rainbow-text' : 'text-neon-yellow'}`}>
+                <div key={hud.score} className={`hx-num dopa-combo-pop origin-top text-4xl md:text-6xl leading-none ${isFever ? 'dopa-rainbow-text' : 'text-neon-yellow'}`}>
                   {hud.score.toLocaleString()}
                 </div>
               </div>
@@ -760,7 +760,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
             <div className="w-24 lg:w-44 text-center">
               {hud.combo >= 2 && (
                 <div className={tier.level >= 1 ? 'dopa-wiggle' : ''}>
-                  <div key={hud.combo} className={`hx-num hx-sticker dopa-combo-pop text-5xl md:text-7xl leading-none ${COMBO_COLOR[tier.level]} ${tier.level >= 2 && !calm ? 'hx-fire' : ''}`}>
+                  <div key={hud.combo} className={`hx-num hx-sticker dopa-combo-pop origin-bottom text-5xl md:text-7xl leading-none ${COMBO_COLOR[tier.level]} ${tier.level >= 2 && !calm ? 'hx-fire' : ''}`}>
                     {hud.combo}
                   </div>
                   <div className="hx-num hx-sticker text-xl md:text-3xl text-white leading-none">COMBO</div>
@@ -769,7 +769,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ difficulty, mode, words, onGame
             </div>
             <div className="hx-tag px-3 py-1 lg:px-5 lg:py-2 min-w-[6rem] lg:min-w-[9rem]" style={{ '--edge': 'var(--pink)' } as React.CSSProperties}>
               <div className="hx-unskew text-center">
-                <div className="text-xs md:text-sm text-neon-pink leading-none">{mode === 'arcade' ? 'のこり' : 'タイム'}</div>
+                <div className="text-xs md:text-sm text-neon-pink leading-none mb-1.5 md:mb-2.5">{mode === 'arcade' ? 'のこり' : 'タイム'}</div>
                 <GameTimer startTime={startTimeRef.current} limitMs={mode === 'arcade' ? ARCADE_SECONDS * 1000 : undefined} />
               </div>
             </div>
