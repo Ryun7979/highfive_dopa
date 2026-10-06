@@ -34,14 +34,15 @@ function shuffleArray<T>(array: T[]): T[] {
  */
 export async function* streamGeneratedWords(
   difficulty: Difficulty,
-  excludeWords: Set<string> = new Set()
+  excludeWords: Set<string> = new Set(),
+  count: number = TOTAL_QUESTIONS
 ): AsyncGenerator<WordDefinition> {
   const allWords = shuffleArray(getAllWords(difficulty));
   let yieldedCount = 0;
 
   for (const word of allWords) {
-    if (yieldedCount >= TOTAL_QUESTIONS) break;
-    
+    if (yieldedCount >= count) break;
+
     if (!excludeWords.has(word.text)) {
       yield word;
       yieldedCount++;
@@ -49,10 +50,10 @@ export async function* streamGeneratedWords(
   }
 
   // もしリストが足りない場合は、除外ワードを無視して再度シャッフルして補填
-  if (yieldedCount < TOTAL_QUESTIONS) {
+  if (yieldedCount < count) {
     const reshuffled = shuffleArray(getAllWords(difficulty));
     for (const word of reshuffled) {
-      if (yieldedCount >= TOTAL_QUESTIONS) break;
+      if (yieldedCount >= count) break;
       yield word;
       yieldedCount++;
     }

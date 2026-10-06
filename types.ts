@@ -5,6 +5,7 @@ export enum GameState {
   PLAYING = 'PLAYING',
   RESULT = 'RESULT',
   DEV_SETTINGS = 'DEV_SETTINGS',
+  OPTIONS = 'OPTIONS',
 }
 
 export enum Difficulty {
@@ -15,11 +16,22 @@ export enum Difficulty {
   CONVERSATION = 'CONVERSATION'
 }
 
+// 練習モード（10問固定）／アーケードモード（60秒タイムアタック）
+export type Mode = 'practice' | 'arcade';
+
+export type Rank = 'C' | 'B' | 'A' | 'S' | 'SS' | 'SSS' | '∞';
+
 export interface GameStats {
   correctChars: number;
   missedChars: number;
   timeElapsed: number; // in milliseconds
   difficulty: Difficulty;
+  mode: Mode;
+  score: number;
+  maxCombo: number;
+  wordsCleared: number;
+  perfectWords: number;
+  feverCount: number;
 }
 
 export interface WordDefinition {

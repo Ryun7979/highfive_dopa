@@ -20,60 +20,60 @@ interface FingerStyle {
 }
 
 const FINGER_MAP: Record<string, FingerStyle> = {
-  'Q': { text: '左手 小指', color: 'bg-pink-400', border: 'border-pink-600', textCol: 'text-pink-600' },
-  'A': { text: '左手 小指', color: 'bg-pink-400', border: 'border-pink-600', textCol: 'text-pink-600' },
-  'Z': { text: '左手 小指', color: 'bg-pink-400', border: 'border-pink-600', textCol: 'text-pink-600' },
-  'W': { text: '左手 薬指', color: 'bg-purple-400', border: 'border-purple-600', textCol: 'text-purple-600' },
-  'S': { text: '左手 薬指', color: 'bg-purple-400', border: 'border-purple-600', textCol: 'text-purple-600' },
-  'X': { text: '左手 薬指', color: 'bg-purple-400', border: 'border-purple-600', textCol: 'text-purple-600' },
-  'E': { text: '左手 中指', color: 'bg-blue-400', border: 'border-blue-600', textCol: 'text-blue-600' },
-  'D': { text: '左手 中指', color: 'bg-blue-400', border: 'border-blue-600', textCol: 'text-blue-600' },
-  'C': { text: '左手 中指', color: 'bg-blue-400', border: 'border-blue-600', textCol: 'text-blue-600' },
-  'R': { text: '左手 人差指', color: 'bg-cyan-400', border: 'border-cyan-600', textCol: 'text-cyan-600' },
-  'T': { text: '左手 人差指', color: 'bg-cyan-400', border: 'border-cyan-600', textCol: 'text-cyan-600' },
-  'F': { text: '左手 人差指', color: 'bg-cyan-400', border: 'border-cyan-600', textCol: 'text-cyan-600' },
-  'G': { text: '左手 人差指', color: 'bg-cyan-400', border: 'border-cyan-600', textCol: 'text-cyan-600' },
-  'V': { text: '左手 人差指', color: 'bg-cyan-400', border: 'border-cyan-600', textCol: 'text-cyan-600' },
-  'B': { text: '左手 人差指', color: 'bg-cyan-400', border: 'border-cyan-600', textCol: 'text-cyan-600' },
-  'Y': { text: '右手 人差指', color: 'bg-green-400', border: 'border-green-600', textCol: 'text-green-600' },
-  'U': { text: '右手 人差指', color: 'bg-green-400', border: 'border-green-600', textCol: 'text-green-600' },
-  'H': { text: '右手 人差指', color: 'bg-green-400', border: 'border-green-600', textCol: 'text-green-600' },
-  'J': { text: '右手 人差指', color: 'bg-green-400', border: 'border-green-600', textCol: 'text-green-600' },
-  'N': { text: '右手 人差指', color: 'bg-green-400', border: 'border-green-600', textCol: 'text-green-600' },
-  'M': { text: '右手 人差指', color: 'bg-green-400', border: 'border-green-600', textCol: 'text-green-600' },
-  'I': { text: '右手 中指', color: 'bg-yellow-400', border: 'border-yellow-600', textCol: 'text-yellow-600' },
-  'K': { text: '右手 中指', color: 'bg-yellow-400', border: 'border-yellow-600', textCol: 'text-yellow-600' },
-  'O': { text: '右手 薬指', color: 'bg-orange-400', border: 'border-orange-600', textCol: 'text-orange-600' },
-  'L': { text: '右手 薬指', color: 'bg-orange-400', border: 'border-orange-600', textCol: 'text-orange-600' },
-  'P': { text: '右手 小指', color: 'bg-red-400', border: 'border-red-600', textCol: 'text-red-600' },
-  '-': { text: '右手 小指', color: 'bg-red-400', border: 'border-red-600', textCol: 'text-red-600' },
+  'Q': { text: '左手 小指', color: 'bg-pink-400', border: 'border-pink-600', textCol: 'text-pink-300' },
+  'A': { text: '左手 小指', color: 'bg-pink-400', border: 'border-pink-600', textCol: 'text-pink-300' },
+  'Z': { text: '左手 小指', color: 'bg-pink-400', border: 'border-pink-600', textCol: 'text-pink-300' },
+  'W': { text: '左手 薬指', color: 'bg-purple-400', border: 'border-purple-600', textCol: 'text-purple-300' },
+  'S': { text: '左手 薬指', color: 'bg-purple-400', border: 'border-purple-600', textCol: 'text-purple-300' },
+  'X': { text: '左手 薬指', color: 'bg-purple-400', border: 'border-purple-600', textCol: 'text-purple-300' },
+  'E': { text: '左手 中指', color: 'bg-blue-400', border: 'border-blue-600', textCol: 'text-blue-300' },
+  'D': { text: '左手 中指', color: 'bg-blue-400', border: 'border-blue-600', textCol: 'text-blue-300' },
+  'C': { text: '左手 中指', color: 'bg-blue-400', border: 'border-blue-600', textCol: 'text-blue-300' },
+  'R': { text: '左手 人差指', color: 'bg-cyan-400', border: 'border-cyan-600', textCol: 'text-cyan-300' },
+  'T': { text: '左手 人差指', color: 'bg-cyan-400', border: 'border-cyan-600', textCol: 'text-cyan-300' },
+  'F': { text: '左手 人差指', color: 'bg-cyan-400', border: 'border-cyan-600', textCol: 'text-cyan-300' },
+  'G': { text: '左手 人差指', color: 'bg-cyan-400', border: 'border-cyan-600', textCol: 'text-cyan-300' },
+  'V': { text: '左手 人差指', color: 'bg-cyan-400', border: 'border-cyan-600', textCol: 'text-cyan-300' },
+  'B': { text: '左手 人差指', color: 'bg-cyan-400', border: 'border-cyan-600', textCol: 'text-cyan-300' },
+  'Y': { text: '右手 人差指', color: 'bg-green-400', border: 'border-green-600', textCol: 'text-green-300' },
+  'U': { text: '右手 人差指', color: 'bg-green-400', border: 'border-green-600', textCol: 'text-green-300' },
+  'H': { text: '右手 人差指', color: 'bg-green-400', border: 'border-green-600', textCol: 'text-green-300' },
+  'J': { text: '右手 人差指', color: 'bg-green-400', border: 'border-green-600', textCol: 'text-green-300' },
+  'N': { text: '右手 人差指', color: 'bg-green-400', border: 'border-green-600', textCol: 'text-green-300' },
+  'M': { text: '右手 人差指', color: 'bg-green-400', border: 'border-green-600', textCol: 'text-green-300' },
+  'I': { text: '右手 中指', color: 'bg-yellow-400', border: 'border-yellow-600', textCol: 'text-yellow-300' },
+  'K': { text: '右手 中指', color: 'bg-yellow-400', border: 'border-yellow-600', textCol: 'text-yellow-300' },
+  'O': { text: '右手 薬指', color: 'bg-orange-400', border: 'border-orange-600', textCol: 'text-orange-300' },
+  'L': { text: '右手 薬指', color: 'bg-orange-400', border: 'border-orange-600', textCol: 'text-orange-300' },
+  'P': { text: '右手 小指', color: 'bg-red-400', border: 'border-red-600', textCol: 'text-red-300' },
+  '-': { text: '右手 小指', color: 'bg-red-400', border: 'border-red-600', textCol: 'text-red-300' },
 };
 
-const DEFAULT_FINGER: FingerStyle = { text: '', color: 'bg-slate-300', border: 'border-slate-400', textCol: 'text-slate-500' };
+const DEFAULT_FINGER: FingerStyle = { text: '', color: 'bg-slate-300', border: 'border-slate-400', textCol: 'text-slate-300' };
 
 export const KeyboardHint: React.FC<KeyboardHintProps> = ({ activeKey }) => {
   const target = activeKey.toUpperCase();
   const fingerInfo = FINGER_MAP[target] || DEFAULT_FINGER;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 p-4 pb-8 bg-white/90 border-t-8 border-slate-200 shadow-[0_-10px_50px_rgba(0,0,0,0.1)] animate-slide-up transition-all duration-300 backdrop-blur-md">
+    <div className="fixed bottom-0 left-0 right-0 z-50 p-4 pb-8 bg-neon-ink/95 border-t-[6px] border-neon-cyan shadow-[0_-10px_50px_rgba(0,240,255,0.5)] animate-slide-up transition-all duration-300 backdrop-blur-md font-pop">
       <div className="max-w-7xl mx-auto flex flex-col items-center gap-6">
         
-        <div className="flex items-center gap-4 md:gap-8 bg-white px-8 py-3 rounded-2xl border-4 border-slate-100 shadow-block">
+        <div className="flex items-center gap-4 md:gap-8 bg-neon-panel px-8 py-3 rounded-2xl border-4 border-neon-yellow shadow-[6px_7px_0_#000]">
           <Hand className={`w-12 h-12 md:w-16 md:h-16 ${fingerInfo.textCol}`} />
           <div className="flex items-baseline gap-4">
              <span className={`text-xl md:text-2xl font-bold text-white px-4 py-1 rounded-lg border-b-4 ${fingerInfo.color} ${fingerInfo.border}`}>
                {fingerInfo.text}
              </span>
-             <span className="text-xl md:text-2xl text-slate-600 font-bold">で</span>
+             <span className="text-xl md:text-2xl text-white font-bold">で</span>
              <span className={`text-5xl md:text-6xl font-mono font-black ${fingerInfo.textCol} drop-shadow-sm`}>
                {target}
              </span>
-             <span className="text-xl md:text-2xl text-slate-600 font-bold">をおしてね</span>
+             <span className="text-xl md:text-2xl text-white font-bold">をおしてね</span>
           </div>
         </div>
 
-        <div className="flex flex-col gap-2 w-full max-w-5xl select-none p-2 bg-slate-200 rounded-xl border-4 border-slate-300">
+        <div className="flex flex-col gap-2 w-full max-w-5xl select-none p-3 bg-neon-panel rounded-2xl border-4 border-neon-purple">
           {KEYS.map((row, rowIndex) => (
             <div key={rowIndex} className="flex justify-center gap-2 md:gap-3">
               {row.map((key) => {
@@ -89,7 +89,7 @@ export const KeyboardHint: React.FC<KeyboardHintProps> = ({ activeKey }) => {
                       transition-all duration-150
                       ${isActive 
                         ? `${fInfo.color} ${fInfo.border} -translate-y-1 shadow-md z-10 text-white` 
-                        : 'bg-white border-slate-300 text-slate-300'
+                        : 'bg-white/10 border-white/20 text-white/40'
                       }
                     `}
                   >

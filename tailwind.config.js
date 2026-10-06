@@ -33,11 +33,25 @@ export default {
         'plastic': 'inset 0 2px 0 rgba(255,255,255,0.4), 0 4px 0 rgba(0,0,0,0.1)',
       },
       colors: {
+        // 開発者設定など、元アプリから残している画面用
         brand: {
           yellow: '#FFD600',
           blue: '#2962FF',
           red: '#FF1744',
           green: '#00E676',
+        },
+        // はちゃめちゃタイプの配色（index.css の :root と同じ値）
+        neon: {
+          ink: '#0B0320',
+          night: '#1A0B3B',
+          panel: '#2A1463',
+          pink: '#FF2E93',
+          cyan: '#00F0FF',
+          lime: '#B6FF00',
+          yellow: '#FFE600',
+          purple: '#8B2BFF',
+          orange: '#FF7A00',
+          red: '#FF2440',
         }
       }
     },

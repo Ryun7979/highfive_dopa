@@ -2,17 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  background-color: #FFD600;
-  color: #1e293b;
-  overscroll-behavior: none;
+/* はちゃめちゃタイプの配色（tailwind.config.js の neon と同じ値） */
+:root {
+  --ink: #0B0320;
+  --night: #1A0B3B;
+  --panel: #2A1463;
+  --pink: #FF2E93;
+  --cyan: #00F0FF;
+  --lime: #B6FF00;
+  --yellow: #FFE600;
+  --purple: #8B2BFF;
+  --orange: #FF7A00;
+  --red: #FF2440;
 }
-.bg-grid-pattern {
-  background-image: 
-    linear-gradient(rgba(255, 255, 255, 0.2) 2px, transparent 2px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.2) 2px, transparent 2px);
-  background-size: 40px 40px;
-  background-position: center top;
+
+body {
+  background-color: var(--night);
+  color: #fff;
+  overscroll-behavior: none;
 }
 
 @keyframes shake {
@@ -24,8 +31,515 @@ body {
   animation: shake 0.2s ease-in-out;
 }
 
-@keyframes fall {
-  0% { transform: translateY(-40px) rotate(0deg) scale(1); opacity: 1; }
-  50% { opacity: 0.9; }
-  100% { transform: translateY(110vh) rotate(720deg) scale(0.5); opacity: 0; }
+.animate-fade-in {
+  animation: dopa-fade-in 0.3s ease-out;
+}
+@keyframes dopa-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ==========================================================
+   出題文字「もじの大きさ」（docs/spec.md §3）
+   --lo は §3.1 の下限。max() で必ず下限以上になる。
+   ふつう は GameScreen.tsx の Tailwind クラス（既存サイズ）を使う。
+   ========================================================== */
+.kana-large, .kana-max { --lo: 5rem; }
+.kana-large-long, .kana-max-long { --lo: 4rem; }
+.romaji-large, .romaji-max { --lo: 3rem; line-height: 1; }
+@media (min-width: 768px) {
+  .kana-large, .kana-max { --lo: 8rem; }
+  .kana-large-long, .kana-max-long { --lo: 6rem; }
+  .romaji-large, .romaji-max { --lo: 4.5rem; }
+}
+@media (min-width: 1024px) {
+  .kana-large, .kana-max { --lo: 10rem; }
+  .romaji-large, .romaji-max { --lo: 6rem; }
+}
+/* おおきい：下限の 1.3 倍。はみ出すときは画面幅に合わせるが、下限は割らない */
+.kana-large, .kana-large-long {
+  font-size: max(var(--lo), min(calc(var(--lo) * 1.3), calc(92vw / (var(--chars, 5) * 1.06))));
+}
+.romaji-large {
+  font-size: max(var(--lo), min(calc(var(--lo) * 1.25), calc(86vw / (var(--rchars, 8) * 0.8))));
+}
+/* さいだい：画面幅いっぱい */
+.kana-max, .kana-max-long {
+  font-size: max(var(--lo), min(calc(92vw / (var(--chars, 5) * 1.06)), 30vh));
+}
+.romaji-max {
+  font-size: max(var(--lo), min(calc(86vw / (var(--rchars, 8) * 0.8)), 11vh));
+}
+
+/* ==========================================================
+   部品（ネオン × ステッカー × コミック）
+   太い黒フチ・段差の影・ななめ（skew）が共通ルール
+   ========================================================== */
+
+/* ステッカー文字：黒い縁取り＋下に落ちる影 */
+.hx-sticker {
+  -webkit-text-stroke: 0.16em var(--ink);
+  paint-order: stroke fill;
+  text-shadow: 0 0.1em 0 var(--ink), 0.04em 0.15em 0 var(--ink);
+}
+.hx-skew { transform: skewX(-8deg); }
+.hx-unskew { transform: skewX(8deg); display: block; }
+
+/* パネル：夜色の板＋ネオンの縁＋段差の影。--edge で縁の色を変える */
+.hx-panel {
+  position: relative;
+  isolation: isolate;
+  background: linear-gradient(160deg, #3A1C86 0%, #241055 55%, #1A0B3B 100%);
+  border: 5px solid var(--ink);
+  border-radius: 28px;
+  box-shadow: 0 0 0 4px var(--edge, var(--cyan)), 0 0 32px 2px var(--edge, var(--cyan)), 12px 14px 0 4px var(--ink);
+}
+.hx-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.16) 22%, rgba(255, 255, 255, 0) 23%);
+  background-size: 14px 14px;
+  -webkit-mask-image: linear-gradient(135deg, #000 0%, transparent 42%);
+  mask-image: linear-gradient(135deg, #000 0%, transparent 42%);
+  pointer-events: none;
+}
+
+/* タグ：HUD の数字などを入れる、ななめの黒い札 */
+.hx-tag {
+  background: var(--ink);
+  border: 4px solid var(--edge, var(--cyan));
+  border-radius: 16px;
+  transform: skewX(-8deg);
+  box-shadow: 6px 7px 0 rgba(0, 0, 0, 0.6), 0 0 18px var(--edge, var(--cyan));
+}
+
+/* ボタン：ぷっくりしたグラデ＋黒フチ＋押し込める段差。色は --c1〜--c3 */
+.hx-btn {
+  --c1: #FF8CC6;
+  --c2: #FF2E93;
+  --c3: #B3005E;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.45);
+  background: linear-gradient(180deg, var(--c1) 0%, var(--c2) 55%, var(--c3) 100%);
+  border: 5px solid var(--ink);
+  border-radius: 22px;
+  box-shadow: inset 0 4px 0 rgba(255, 255, 255, 0.55), inset 0 -7px 0 rgba(0, 0, 0, 0.22), 0 10px 0 var(--ink);
+  transform: skewX(-8deg);
+  transition: transform 0.08s ease-out, box-shadow 0.08s ease-out, filter 0.15s;
+  cursor: pointer;
+}
+.hx-btn::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -60%;
+  width: 40%;
+  z-index: -1;
+  background: linear-gradient(100deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0));
+  animation: hx-shine 2.8s ease-in-out infinite;
+}
+@keyframes hx-shine {
+  0%, 55% { left: -60%; }
+  100% { left: 130%; }
+}
+.hx-btn:hover {
+  transform: skewX(-8deg) translateY(-5px) scale(1.05) rotate(-1.5deg);
+  filter: brightness(1.12) saturate(1.25);
+  box-shadow: inset 0 4px 0 rgba(255, 255, 255, 0.55), inset 0 -7px 0 rgba(0, 0, 0, 0.22), 0 15px 0 var(--ink), 0 0 30px var(--c2);
+}
+.hx-btn:active {
+  transform: skewX(-8deg) translateY(8px);
+  box-shadow: inset 0 4px 0 rgba(255, 255, 255, 0.55), inset 0 -7px 0 rgba(0, 0, 0, 0.22), 0 2px 0 var(--ink);
+}
+.hx-btn-in {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: skewX(8deg);
+}
+.hx-pink { --c1: #FF8CC6; --c2: #FF2E93; --c3: #B3005E; }
+.hx-cyan { --c1: #8CFBFF; --c2: #00C2F0; --c3: #0068B3; }
+.hx-lime { --c1: #E4FF7A; --c2: #86D900; --c3: #3B8A00; }
+.hx-yellow { --c1: #FFF58A; --c2: #FFC400; --c3: #D97A00; }
+.hx-purple { --c1: #C99BFF; --c2: #8B2BFF; --c3: #4A0FA6; }
+.hx-orange { --c1: #FFBE7A; --c2: #FF7A00; --c3: #B84300; }
+.hx-red { --c1: #FF9A9A; --c2: #FF2440; --c3: #A60020; }
+.hx-dark { --c1: #6B56A8; --c2: #3A2470; --c3: #1F0F4A; }
+.hx-off { --c1: #6E6890; --c2: #47406A; --c3: #2B2647; color: #B9B3D9; }
+.hx-off::after { display: none; }
+
+/* コミックのギザギザ吹き出し */
+.hx-burst {
+  clip-path: polygon(50% 0%, 59% 14%, 75% 7%, 77% 23%, 93% 25%, 86% 40%, 100% 50%, 86% 60%, 93% 75%, 77% 77%, 75% 93%, 59% 86%, 50% 100%, 41% 86%, 25% 93%, 23% 77%, 7% 75%, 14% 60%, 0% 50%, 14% 40%, 7% 25%, 23% 23%, 25% 7%, 41% 14%);
+}
+.hx-spin { animation: dopa-spin 9s linear infinite; }
+.hx-spin-fast { animation: dopa-spin 2.5s linear infinite; }
+
+/* 流れる帯（ティッカー）。中身を2回並べて半分だけ流す */
+.hx-ticker {
+  overflow: hidden;
+  white-space: nowrap;
+  background: var(--yellow);
+  color: var(--ink);
+  border-top: 5px solid var(--ink);
+  border-bottom: 5px solid var(--ink);
+  transform: rotate(-1.2deg) scale(1.03);
+}
+.hx-ticker-track {
+  display: inline-block;
+  animation: hx-ticker 18s linear infinite;
+}
+@keyframes hx-ticker {
+  to { transform: translateX(-50%); }
+}
+
+/* 出題エリアの上下を走る注意テープ（文字にはかからない位置） */
+.hx-tape {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 10px;
+  background: repeating-linear-gradient(-45deg, var(--tape, var(--yellow)) 0 14px, var(--ink) 14px 28px);
+  background-size: 39.6px 100%;
+  animation: hx-tape 0.8s linear infinite;
+  opacity: 0.9;
+}
+@keyframes hx-tape {
+  to { background-position: 39.6px 0; }
+}
+
+/* FEVER ゲージ：ななめで目盛りつき */
+.hx-gauge {
+  position: relative;
+  background: var(--ink);
+  border: 5px solid var(--ink);
+  border-radius: 14px;
+  overflow: hidden;
+  transform: skewX(-14deg);
+  box-shadow: 0 0 0 4px var(--edge, #fff), 6px 8px 0 4px rgba(0, 0, 0, 0.6);
+}
+.hx-gauge::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(90deg, rgba(11, 3, 32, 0) 0 calc(5% - 3px), rgba(11, 3, 32, 0.85) calc(5% - 3px) 5%);
+  pointer-events: none;
+}
+
+.hx-num {
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 800;
+  font-style: italic;
+}
+.hx-float { animation: hx-float 1.6s ease-in-out infinite alternate; }
+@keyframes hx-float {
+  from { transform: translateY(0) rotate(-3deg); }
+  to { transform: translateY(-10px) rotate(3deg); }
+}
+
+/* ==========================================================
+   背景レイヤー
+   ========================================================== */
+.dopa-bg {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  z-index: 0;
+  background-color: var(--night);
+}
+.dopa-bg-0 {
+  --ray: 0.1;
+  background-image: radial-gradient(circle at 15% 10%, #6A2BFF 0%, rgba(106, 43, 255, 0) 48%), radial-gradient(circle at 88% 85%, #FF2E93 0%, rgba(255, 46, 147, 0) 46%), radial-gradient(circle at 80% 8%, #00B7F0 0%, rgba(0, 183, 240, 0) 36%);
+}
+.dopa-bg-1 {
+  --ray: 0.14;
+  background-color: #3A0CA3;
+  background-image: radial-gradient(circle at 12% 12%, #FF2E93 0%, rgba(255, 46, 147, 0) 52%), radial-gradient(circle at 90% 88%, #00F0FF 0%, rgba(0, 240, 255, 0) 48%);
+}
+.dopa-bg-2 {
+  --ray: 0.2;
+  background-image: linear-gradient(135deg, #FF2E93 0%, #FF7A00 55%, #FFE600 100%);
+}
+.dopa-bg-3 {
+  --ray: 0.24;
+  background-image: linear-gradient(135deg, #00F0FF 0%, #2B6BFF 40%, #8B2BFF 70%, #FF2E93 100%);
+}
+.dopa-bg-4 {
+  --ray: 0.3;
+  background-color: #05010F;
+  background-image: conic-gradient(from 0deg at 50% 50%, #FF2440, #FF7A00, #FFE600, #B6FF00, #00F0FF, #8B2BFF, #FF2E93, #FF2440);
+  animation: dopa-hue 1.5s linear infinite;
+}
+.dopa-bg-fever {
+  --ray: 0.3;
+  background: linear-gradient(120deg, #FF2440, #FF7A00, #FFE600, #B6FF00, #00F0FF, #8B2BFF, #FF2E93, #FF2440);
+  background-size: 400% 400%;
+  animation: dopa-bg-flow 1.6s linear infinite, dopa-hue 2s linear infinite;
+}
+@keyframes dopa-bg-flow {
+  from { background-position: 0% 50%; }
+  to { background-position: 133% 50%; }
+}
+@keyframes dopa-hue {
+  from { filter: hue-rotate(0deg) saturate(1.3); }
+  to { filter: hue-rotate(360deg) saturate(1.3); }
+}
+.dopa-sunburst {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 240vmax;
+  height: 240vmax;
+  margin: -120vmax 0 0 -120vmax;
+  opacity: var(--ray, 0.2);
+  background: repeating-conic-gradient(from 0deg, #fff 0deg 9deg, rgba(255, 255, 255, 0) 9deg 18deg);
+  animation: dopa-spin var(--spin, 48s) linear infinite;
+}
+@keyframes dopa-spin {
+  to { transform: rotate(360deg); }
+}
+.dopa-stripes {
+  position: absolute;
+  inset: -200px;
+  background: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.07) 0 40px, rgba(255, 255, 255, 0) 40px 80px);
+  animation: dopa-slide var(--slide, 4s) linear infinite;
+}
+@keyframes dopa-slide {
+  to { transform: translateX(113.137px); }
+}
+.dopa-dots {
+  position: absolute;
+  inset: -120px;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.22) 14%, rgba(255, 255, 255, 0) 15%);
+  background-size: 44px 44px;
+  -webkit-mask-image: linear-gradient(200deg, #000 0%, transparent 55%);
+  mask-image: linear-gradient(200deg, #000 0%, transparent 55%);
+  animation: dopa-dots-move calc(var(--slide, 4s) * 1.5) linear infinite;
+}
+@keyframes dopa-dots-move {
+  to { transform: translate(-44px, 44px); }
+}
+/* 奥へ流れていくネオンの床 */
+.dopa-floor {
+  position: absolute;
+  left: -50%;
+  right: -50%;
+  bottom: -6vh;
+  height: 46vh;
+  transform: perspective(380px) rotateX(64deg);
+  transform-origin: 50% 100%;
+  background-image: linear-gradient(rgba(0, 240, 255, 0.75) 3px, rgba(0, 240, 255, 0) 3px), linear-gradient(90deg, rgba(255, 46, 147, 0.75) 3px, rgba(255, 46, 147, 0) 3px);
+  background-size: 80px 80px;
+  -webkit-mask-image: linear-gradient(0deg, #000 10%, transparent 95%);
+  mask-image: linear-gradient(0deg, #000 10%, transparent 95%);
+  animation: dopa-floor calc(var(--slide, 4s) * 0.5) linear infinite;
+}
+@keyframes dopa-floor {
+  to { background-position: 0 80px, 0 0; }
+}
+.dopa-vignette {
+  position: absolute;
+  inset: 0;
+  box-shadow: inset 0 0 120px 40px #FF2440;
+  animation: dopa-vignette 0.6s linear infinite;
+}
+@keyframes dopa-vignette {
+  0% { box-shadow: inset 0 0 120px 40px #FF2440; }
+  25% { box-shadow: inset 0 0 160px 60px #FFE600; }
+  50% { box-shadow: inset 0 0 120px 40px #00F0FF; }
+  75% { box-shadow: inset 0 0 160px 60px #8B2BFF; }
+  100% { box-shadow: inset 0 0 120px 40px #FF2440; }
+}
+.dopa-calm,
+.dopa-calm * {
+  animation: none !important;
+}
+
+/* ==========================================================
+   ラビッドパのオーラ
+   ========================================================== */
+.rb-aura-glow {
+  position: absolute;
+  left: 14%;
+  right: 14%;
+  top: 30%;
+  bottom: 2%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--aura, #FFF59D) 0%, rgba(255, 255, 255, 0) 100%);
+  animation: rb-aura-pulse 0.5s ease-in-out infinite alternate;
+}
+@keyframes rb-aura-pulse {
+  from { transform: scale(0.9); opacity: 0.6; }
+  to { transform: scale(1.25); opacity: 1; }
+}
+.rb-aura-1 { --aura: #FFE600; }
+.rb-aura-2 { --aura: #FF7A00; filter: drop-shadow(0 0 10px #FFE600); }
+.rb-aura-3 { --aura: #00F0FF; filter: drop-shadow(0 0 16px #00F0FF) drop-shadow(0 0 30px #FF2E93); }
+.rb-aura-4 { --aura: #FFFFFF; animation: rb-awaken 0.7s linear infinite; }
+.rb-rainbow { animation: rb-awaken 0.5s linear infinite; }
+@keyframes rb-awaken {
+  0% { filter: drop-shadow(0 0 16px #FF2440) drop-shadow(0 0 36px #FFE600) hue-rotate(0deg) saturate(1.4); }
+  100% { filter: drop-shadow(0 0 16px #FF2440) drop-shadow(0 0 36px #FFE600) hue-rotate(360deg) saturate(1.4); }
+}
+
+/* ==========================================================
+   プレイ画面の演出
+   ========================================================== */
+.dopa-rainbow-text {
+  animation: dopa-rainbow-text 0.8s linear infinite;
+}
+@keyframes dopa-rainbow-text {
+  0% { color: #FF5C7A; }
+  20% { color: #FFE94D; }
+  40% { color: #B6FF00; }
+  60% { color: #6FF6FF; }
+  80% { color: #D9A0FF; }
+  100% { color: #FF5C7A; }
+}
+.dopa-rainbow-border {
+  animation: dopa-rainbow-border 0.6s linear infinite;
+}
+@keyframes dopa-rainbow-border {
+  0% { border-color: #FF2440; box-shadow: 0 0 60px #FF2440; }
+  25% { border-color: #FFE600; box-shadow: 0 0 60px #FFE600; }
+  50% { border-color: #B6FF00; box-shadow: 0 0 60px #B6FF00; }
+  75% { border-color: #00F0FF; box-shadow: 0 0 60px #00F0FF; }
+  100% { border-color: #FF2440; box-shadow: 0 0 60px #FF2440; }
+}
+.dopa-glow-border {
+  box-shadow: 0 0 40px #FFE600, 0 0 80px #FF7A00;
+}
+.dopa-glow-cyan {
+  box-shadow: 0 0 46px rgba(0, 240, 255, 0.75);
+}
+
+/* コンボ数：増えるたびに key を変えて弾ませる */
+.dopa-combo-pop {
+  animation: dopa-combo-pop 0.18s ease-out;
+}
+@keyframes dopa-combo-pop {
+  0% { transform: scale(1.7) rotate(-8deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+.dopa-wiggle {
+  animation: dopa-wiggle 0.35s ease-in-out infinite alternate;
+}
+@keyframes dopa-wiggle {
+  from { transform: rotate(-4deg) scale(1); }
+  to { transform: rotate(4deg) scale(1.08); }
+}
+
+/* GREAT! / PERFECT!!：回転しながら出る */
+.dopa-pop-word {
+  animation: dopa-pop-word 0.9s cubic-bezier(0.2, 1.4, 0.4, 1) forwards;
+}
+@keyframes dopa-pop-word {
+  0% { transform: scale(0.1) rotate(-540deg); opacity: 0; }
+  35% { transform: scale(1.25) rotate(8deg); opacity: 1; }
+  55% { transform: scale(1) rotate(-6deg); opacity: 1; }
+  80% { transform: scale(1.05) rotate(-6deg); opacity: 1; }
+  100% { transform: scale(1.6) rotate(-6deg) translateY(-30vh); opacity: 0; }
+}
+/* 段階アップ・FEVER の帯：横から突っ込んでくる */
+.dopa-pop-banner {
+  animation: dopa-pop-banner 1.4s cubic-bezier(0.2, 1.2, 0.3, 1) forwards;
+}
+@keyframes dopa-pop-banner {
+  0% { transform: translateX(-120vw) skewX(-20deg); }
+  18% { transform: translateX(0) skewX(-8deg); }
+  26% { transform: translateX(2vw) skewX(-8deg) scale(1.08); }
+  75% { transform: translateX(4vw) skewX(-8deg) scale(1); }
+  100% { transform: translateX(130vw) skewX(-20deg); }
+}
+/* 色反転（コンボ 50 以上の単語クリア時） */
+.dopa-invert {
+  animation: dopa-invert 0.14s steps(2, jump-none);
+}
+@keyframes dopa-invert {
+  0% { filter: invert(1) hue-rotate(180deg); }
+  50% { filter: invert(1); }
+  100% { filter: none; }
+}
+/* FEVER ゲージの中身 */
+.dopa-gauge-fill {
+  background: linear-gradient(90deg, #00F0FF, #B6FF00, #FFE600, #FF7A00, #FF2E93);
+  transition: width 0.12s ease-out;
+}
+.dopa-gauge-fever {
+  background: linear-gradient(90deg, #FF2440, #FF7A00, #FFE600, #B6FF00, #00F0FF, #8B2BFF, #FF2E93, #FF2440);
+  background-size: 200% 100%;
+  animation: dopa-gauge-drain var(--fever, 8s) linear forwards, dopa-gauge-flow 0.5s linear infinite;
+}
+@keyframes dopa-gauge-drain {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+@keyframes dopa-gauge-flow {
+  to { background-position: 200% 0; }
+}
+.dopa-blink {
+  animation: dopa-blink 0.25s steps(2, jump-none) infinite;
+}
+@keyframes dopa-blink {
+  0% { opacity: 1; }
+  100% { opacity: 0.35; }
+}
+
+/* ==========================================================
+   タイトル・リザルト
+   ========================================================== */
+.dopa-title-char {
+  display: inline-block;
+  animation: dopa-title-char 0.9s ease-in-out infinite;
+}
+@keyframes dopa-title-char {
+  0%, 100% { transform: translateY(0) rotate(var(--r, -5deg)) scale(1); }
+  50% { transform: translateY(-16px) rotate(calc(var(--r, -5deg) * -1)) scale(1.12); }
+}
+.dopa-rainbow-fill {
+  background: linear-gradient(90deg, #FF2440, #FF7A00, #FFE600, #B6FF00, #00F0FF, #8B2BFF, #FF2E93, #FF2440);
+  background-size: 200% 100%;
+  animation: dopa-gauge-flow 1.2s linear infinite;
+}
+.dopa-throb {
+  animation: dopa-throb 0.5s ease-in-out infinite alternate;
+}
+@keyframes dopa-throb {
+  from { transform: scale(1); }
+  to { transform: scale(1.07); }
+}
+/* ランク発表：奥から叩きつける */
+.dopa-rank-slam {
+  transform: rotate(-6deg);
+  animation: dopa-rank-slam 0.55s cubic-bezier(0.2, 1.6, 0.4, 1) backwards;
+}
+@keyframes dopa-rank-slam {
+  0% { transform: scale(9) rotate(-40deg); opacity: 0; }
+  60% { transform: scale(0.85) rotate(6deg); opacity: 1; }
+  100% { transform: scale(1) rotate(-6deg); opacity: 1; }
+}
+.dopa-drumroll {
+  animation: dopa-drumroll 0.08s linear infinite alternate;
+}
+@keyframes dopa-drumroll {
+  from { transform: translate(-3px, 2px) rotate(-2deg); }
+  to { transform: translate(3px, -2px) rotate(2deg); }
+}
+/* 縦に収まらない画面ではスクロールできるが、演出の拡大でスクロールバーがちらつかないよう隠す */
+.dopa-scroll {
+  scrollbar-width: none;
+}
+.dopa-scroll::-webkit-scrollbar {
+  display: none;
 }

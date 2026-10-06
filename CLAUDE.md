@@ -1,6 +1,6 @@
 # highfive_dopa — Claude Code 作業ガイド
 
-子ども向けのド派手演出ローマ字タイピングゲーム（仮題「ドパガキ タイピング」）。React 19 + TypeScript + Vite + Tailwind CSS v3。完全オフライン動作。
+子ども向けのド派手演出ローマ字タイピングゲーム（タイトル「はちゃめちゃタイプ」）。React 19 + TypeScript + Vite + Tailwind CSS v3。完全オフライン動作。
 
 ## このプロジェクトについて
 

@@ -1,4 +1,4 @@
-# highfive_dopa（ドパガキ タイピング）
+# highfive_dopa（はちゃめちゃタイプ）
 
 視力の弱い子も遊べる、ド派手演出の子ども向けローマ字タイピングゲーム。
 [highfive_7979](../highfive_7979)（TYPING MINI v0.4.3）をベースにしています。

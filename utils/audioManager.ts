@@ -255,6 +255,282 @@ class AudioManager {
   public playFanfare() {
     this.playBuffer('FANFARE');
   }
+
+  // --- ここから highfive_dopa の追加分（その場で合成して鳴らす） ---
+
+  private noiseBuffer: AudioBuffer | null = null;
+  private bgmGain: GainNode | null = null;
+  private bgmTimer: number | null = null;
+  private bgmStep = 0;
+  private bgmNextTime = 0;
+  private bgmRate = 1;
+  private bgmIntensity = 0;
+
+  // 鳴らせる状態なら AudioContext を返す
+  private ready(): AudioContext | null {
+    if (this.currentLevel === 'OFF') return null;
+    this.init();
+    return this.ctx && this.masterGain ? this.ctx : null;
+  }
+
+  private midi(note: number): number {
+    return 440 * Math.pow(2, (note - 69) / 12);
+  }
+
+  // 1音。slideTo を渡すと周波数を滑らせる
+  private tone(freq: number, start: number, dur: number, type: OscillatorType, vol: number, slideTo?: number, dest?: AudioNode) {
+    const ctx = this.ctx!;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, start);
+    if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, start + dur);
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.linearRampToValueAtTime(vol, start + 0.006);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+    osc.connect(gain);
+    gain.connect(dest || this.masterGain!);
+    osc.start(start);
+    osc.stop(start + dur + 0.02);
+  }
+
+  private noise(start: number, dur: number, vol: number, filter: BiquadFilterType, freq: number, dest?: AudioNode, sweepTo?: number) {
+    const ctx = this.ctx!;
+    if (!this.noiseBuffer) {
+      this.noiseBuffer = this.createBuffer(1);
+      const data = this.noiseBuffer.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = this.noiseBuffer;
+    src.loop = true;
+    const biquad = ctx.createBiquadFilter();
+    biquad.type = filter;
+    biquad.frequency.setValueAtTime(freq, start);
+    if (sweepTo) biquad.frequency.exponentialRampToValueAtTime(sweepTo, start + dur);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.linearRampToValueAtTime(vol, start + 0.004);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+    src.connect(biquad);
+    biquad.connect(gain);
+    gain.connect(dest || this.masterGain!);
+    src.start(start);
+    src.stop(start + dur + 0.02);
+  }
+
+  // 正打鍵。コンボが続くほどドレミ…と音階が上がる（1オクターブでループ）
+  public playTypeNote(combo: number) {
+    const ctx = this.ready();
+    if (!ctx) return;
+    const scale = [0, 2, 4, 5, 7, 9, 11, 12];
+    const note = 72 + scale[(Math.max(1, combo) - 1) % scale.length];
+    const t = ctx.currentTime;
+    this.playBuffer('TYPE', (Math.random() * 50) - 25);
+    this.tone(this.midi(note), t, 0.16, 'triangle', 0.55);
+    this.tone(this.midi(note + 12), t, 0.07, 'square', 0.1);
+  }
+
+  // 単語クリア。ノーミス（PERFECT）はキラキラを足す
+  public playWordClear(perfect: boolean) {
+    const ctx = this.ready();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const notes = perfect ? [84, 88, 91, 96, 100, 103] : [84, 88, 91, 96];
+    notes.forEach((n, i) => {
+      this.tone(this.midi(n), t + i * 0.045, 0.22, 'triangle', 0.4);
+      this.tone(this.midi(n), t + i * 0.045, 0.1, 'square', 0.08);
+    });
+    if (perfect) {
+      this.noise(t, 0.5, 0.25, 'highpass', 6000);
+      this.tone(this.midi(108), t + 0.28, 0.5, 'sine', 0.3);
+    }
+  }
+
+  // ミスの「ガシャーン」
+  public playCrash() {
+    const ctx = this.ready();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    this.noise(t, 0.55, 0.9, 'highpass', 2500);
+    this.noise(t, 0.25, 0.9, 'lowpass', 500);
+    [523, 1337, 2113, 3301, 4409].forEach((f, i) => {
+      this.tone(f, t + i * 0.012, 0.35 - i * 0.04, 'square', 0.12);
+    });
+    this.tone(160, t, 0.3, 'sawtooth', 0.5, 40);
+  }
+
+  // コンボ段階アップ
+  public playComboUp(level: number) {
+    const ctx = this.ready();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    this.tone(220, t, 0.3, 'sawtooth', 0.3, 880 * (1 + level * 0.25));
+    this.noise(t, 0.35, 0.3, 'bandpass', 400, undefined, 6000);
+    const root = 72 + level * 2;
+    [0, 4, 7, 12].forEach(n => this.tone(this.midi(root + n), t + 0.28, 0.4, 'square', 0.14));
+  }
+
+  public playFeverStart() {
+    const ctx = this.ready();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    this.tone(300, t, 0.35, 'sawtooth', 0.35, 1800);
+    this.tone(300, t + 0.35, 0.35, 'sawtooth', 0.35, 2400);
+    this.noise(t, 0.7, 0.35, 'bandpass', 300, undefined, 9000);
+    [72, 76, 79, 84, 88, 91, 96].forEach((n, i) => {
+      this.tone(this.midi(n), t + 0.7 + i * 0.05, 0.5, 'square', 0.16);
+      this.tone(this.midi(n + 7), t + 0.7 + i * 0.05, 0.5, 'triangle', 0.2);
+    });
+    this.noise(t + 0.7, 0.9, 0.5, 'highpass', 5000);
+  }
+
+  public playFeverEnd() {
+    const ctx = this.ready();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    this.tone(1400, t, 0.5, 'sawtooth', 0.25, 180);
+    this.noise(t, 0.5, 0.2, 'bandpass', 5000, undefined, 300);
+  }
+
+  // アーケードモードの残り時間カウント
+  public playTick() {
+    const ctx = this.ready();
+    if (!ctx) return;
+    this.tone(1760, ctx.currentTime, 0.08, 'square', 0.3);
+  }
+
+  public playTimeUp() {
+    const ctx = this.ready();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    this.tone(2200, t, 0.9, 'square', 0.3, 1900);
+    this.tone(2330, t, 0.9, 'square', 0.3, 2000);
+    this.noise(t, 0.9, 0.3, 'highpass', 4000);
+  }
+
+  // リザルトのドラムロール（dur 秒）
+  public playDrumroll(dur: number) {
+    const ctx = this.ready();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    for (let s = 0; s < dur; s += 0.045) {
+      this.noise(t + s, 0.05, 0.25 + 0.4 * (s / dur), 'bandpass', 1800);
+    }
+  }
+
+  // ランクのスタンプが叩きつけられる音。big はランク S 以上
+  public playRankSlam(big: boolean) {
+    const ctx = this.ready();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    this.tone(180, t, 0.6, 'sine', 1.0, 35);
+    this.noise(t, 0.8, 0.8, 'lowpass', 1200);
+    this.noise(t, 1.2, 0.5, 'highpass', 4000);
+    const chord = big ? [60, 64, 67, 72, 76, 79, 84] : [60, 64, 67, 72];
+    chord.forEach((n, i) => {
+      this.tone(this.midi(n), t + 0.05 + i * 0.03, big ? 1.6 : 0.9, 'sawtooth', 0.09);
+      this.tone(this.midi(n + 12), t + 0.05 + i * 0.03, big ? 1.6 : 0.9, 'triangle', 0.14);
+    });
+  }
+
+  public playCountBlip(step: number) {
+    const ctx = this.ready();
+    if (!ctx) return;
+    this.tone(this.midi(84 + (step % 12)), ctx.currentTime, 0.05, 'square', 0.12);
+  }
+
+  // --- BGM（8分音符のステップシーケンサー）---
+  // コンボ段階（intensity）でパートが増え、FEVER（rate=2）で倍速になる
+
+  public startBgm() {
+    const ctx = this.ready();
+    if (!ctx || this.bgmTimer !== null) return;
+    this.bgmGain = ctx.createGain();
+    this.bgmGain.gain.value = 0.45;
+    this.bgmGain.connect(this.masterGain!);
+    this.bgmStep = 0;
+    this.bgmRate = 1;
+    this.bgmIntensity = 0;
+    this.bgmNextTime = ctx.currentTime + 0.05;
+    this.bgmTimer = window.setInterval(() => this.scheduleBgm(), 40);
+  }
+
+  public stopBgm() {
+    if (this.bgmTimer !== null) {
+      clearInterval(this.bgmTimer);
+      this.bgmTimer = null;
+    }
+    if (this.bgmGain && this.ctx) {
+      const g = this.bgmGain;
+      g.gain.setValueAtTime(g.gain.value, this.ctx.currentTime);
+      g.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.15);
+      window.setTimeout(() => g.disconnect(), 400);
+      this.bgmGain = null;
+    }
+  }
+
+  public setBgmRate(rate: number) {
+    this.bgmRate = rate;
+  }
+
+  public setBgmIntensity(level: number) {
+    this.bgmIntensity = level;
+  }
+
+  private scheduleBgm() {
+    if (!this.ctx || !this.bgmGain) return;
+    const stepDur = 60 / 132 / 2;
+    if (this.bgmNextTime < this.ctx.currentTime) this.bgmNextTime = this.ctx.currentTime + 0.02;
+    while (this.bgmNextTime < this.ctx.currentTime + 0.15) {
+      this.playBgmStep(this.bgmStep, this.bgmNextTime, stepDur / this.bgmRate);
+      this.bgmNextTime += stepDur / this.bgmRate;
+      this.bgmStep = (this.bgmStep + 1) % 32;
+    }
+  }
+
+  private playBgmStep(step: number, t: number, d: number) {
+    const out = this.bgmGain!;
+    const fever = this.bgmRate > 1;
+    const lv = fever ? 4 : this.bgmIntensity;
+    const bar = step >> 3, i = step & 7;
+    // C – G – Am – F
+    const roots = [48, 43, 45, 41];
+    const chord = bar === 2 ? [0, 3, 7, 12] : [0, 4, 7, 12];
+    const root = roots[bar];
+
+    // ベース
+    if (i === 0 || i === 3 || i === 4 || i === 6) {
+      const up = i === 3 || i === 6 ? 12 : 0;
+      this.tone(this.midi(root + up), t, d * 0.9, 'square', 0.22, undefined, out);
+      this.tone(this.midi(root + up - 12), t, d * 0.9, 'triangle', 0.4, undefined, out);
+    }
+    // キック
+    if (i % 4 === 0 || (lv >= 3 && i === 7)) {
+      this.tone(150, t, 0.16, 'sine', 0.95, 42, out);
+    }
+    // スネア
+    if (lv >= 2 && (i === 2 || i === 6)) {
+      this.noise(t, 0.14, 0.4, 'bandpass', 1800, out);
+      this.tone(220, t, 0.08, 'triangle', 0.25, 120, out);
+    }
+    // ハイハット
+    if (lv >= 1 || i % 2 === 1) {
+      this.noise(t, 0.035, i % 2 === 1 ? 0.22 : 0.1, 'highpass', 8000, out);
+    }
+    // メロディ（コードのアルペジオ）
+    if (lv >= 1) {
+      const pattern = [0, 2, 1, 2, 3, 2, 1, 2];
+      const note = root + 24 + chord[pattern[i]];
+      this.tone(this.midi(note), t, d * 0.6, 'square', 0.11, undefined, out);
+      if (lv >= 3) {
+        this.tone(this.midi(note + 12), t + d * 0.5, d * 0.4, 'triangle', 0.14, undefined, out);
+      }
+      if (lv >= 4) {
+        this.tone(this.midi(note + 7), t, d * 0.6, 'sawtooth', 0.05, undefined, out);
+      }
+    }
+  }
 }
 
 export const audioManager = new AudioManager();

@@ -1,36 +1,50 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import TitleScreen from './components/TitleScreen';
 import GameScreen from './components/GameScreen';
 import ResultScreen from './components/ResultScreen';
 import LoadingScreen from './components/LoadingScreen';
 import DevSettingsScreen from './components/DevSettingsScreen';
-import { GameState, GameStats, Difficulty, WordDefinition } from './types';
+import OptionsScreen from './components/OptionsScreen';
+import { GameState, GameStats, Difficulty, Mode, Rank, WordDefinition } from './types';
 import { streamGeneratedWords } from './utils/wordGenerator';
 import { getSettings, FontType } from './utils/settingsManager';
+import { BestRecord, getBest, loadSave, recordResult } from './utils/saveData';
+import { ARCADE_WORD_POOL, getRank } from './utils/gameRules';
+
+interface ResultInfo {
+  rank: Rank;
+  isNewBest: boolean;
+  prevBest?: BestRecord;
+}
 
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>(GameState.TITLE);
-  const [gameStats, setGameStats] = useState<GameStats>({ correctChars: 0, missedChars: 0, timeElapsed: 0, difficulty: Difficulty.NORMAL });
+  const [gameStats, setGameStats] = useState<GameStats | null>(null);
+  const [resultInfo, setResultInfo] = useState<ResultInfo>({ rank: 'C', isNewBest: false });
   const [currentDifficulty, setCurrentDifficulty] = useState<Difficulty>(Difficulty.NORMAL);
+  const [currentMode, setCurrentMode] = useState<Mode>('practice');
   const [gameWords, setGameWords] = useState<WordDefinition[]>([]);
-  const [fontType, setFontType] = useState<FontType>('POP');
-  
-  const playedWordsRef = useRef<Set<string>>(new Set());
+  const [fontType, setFontType] = useState<FontType>(() => getSettings().fontType);
+  const [gameSettings, setGameSettings] = useState(() => loadSave().settings);
 
-  // 初期設定読み込み
-  useEffect(() => {
-    setFontType(getSettings().fontType);
-  }, []);
+  const playedWordsRef = useRef<Set<string>>(new Set());
+  const loadRunRef = useRef(0);
 
   // 設定画面からの復帰用
   const refreshSettings = useCallback(() => {
     setFontType(getSettings().fontType);
+    setGameSettings(loadSave().settings);
   }, []);
 
-  const fetchWordsForGame = async (difficulty: Difficulty) => {
+  const fetchWordsForGame = async (mode: Mode, difficulty: Difficulty) => {
+    const run = ++loadRunRef.current;
     setGameWords([]);
-    const stream = streamGeneratedWords(difficulty, playedWordsRef.current);
+    // アーケードは 60 秒で何問でも出るので多めに用意し、既出除外の対象にしない
+    const stream = mode === 'arcade'
+      ? streamGeneratedWords(difficulty, new Set(), ARCADE_WORD_POOL)
+      : streamGeneratedWords(difficulty, playedWordsRef.current);
     for await (const word of stream) {
+      if (run !== loadRunRef.current) return; // やり直しで古い読み込みが残らないように
       setGameWords(prev => {
         const next = [...prev, word];
         // 最初の5単語が揃ったらロード完了とする
@@ -39,47 +53,78 @@ const App: React.FC = () => {
         }
         return next;
       });
-      playedWordsRef.current.add(word.text);
+      if (mode === 'practice') playedWordsRef.current.add(word.text);
     }
   };
 
-  const startGame = (difficulty: Difficulty) => {
+  const startGame = useCallback((mode: Mode, difficulty: Difficulty) => {
+    setCurrentMode(mode);
     setCurrentDifficulty(difficulty);
     setGameState(GameState.LOADING);
-    fetchWordsForGame(difficulty);
-  };
+    fetchWordsForGame(mode, difficulty);
+  }, []);
 
-  const restartGame = useCallback(() => {
+  const backToTitle = useCallback(() => {
+    loadRunRef.current++;
     setGameState(GameState.TITLE);
     setGameWords([]);
   }, []);
 
+  // リザルトから Enter 一発で同じモード・難易度をもう一度（docs/spec.md §9.3）
+  const retryGame = useCallback(() => {
+    startGame(currentMode, currentDifficulty);
+  }, [startGame, currentMode, currentDifficulty]);
+
   const handleGameEnd = useCallback((stats: GameStats) => {
+    const rank = getRank(stats.score, stats.mode, stats.difficulty);
+    const prevBest = getBest(stats.mode, stats.difficulty);
+    const isNewBest = recordResult(stats, rank);
+    setResultInfo({ rank, isNewBest, prevBest });
     setGameStats(stats);
     setGameState(GameState.RESULT);
   }, []);
 
   return (
-    <div className="min-h-screen bg-brand-yellow bg-grid-pattern text-slate-800 font-sans overflow-hidden">
+    <div className="min-h-screen bg-neon-night text-white font-sans overflow-hidden">
       <main className="relative z-10 w-full h-full">
         {gameState === GameState.TITLE && (
-          <TitleScreen onStart={startGame} onPrefetch={() => {}} onOpenSettings={() => setGameState(GameState.DEV_SETTINGS)} />
+          <TitleScreen
+            initialMode={currentMode}
+            effectLevel={gameSettings.effectLevel}
+            onStart={startGame}
+            onOpenSettings={() => setGameState(GameState.DEV_SETTINGS)}
+            onOpenOptions={() => setGameState(GameState.OPTIONS)}
+          />
         )}
         {gameState === GameState.DEV_SETTINGS && (
           <DevSettingsScreen onBack={() => setGameState(GameState.TITLE)} onSettingsSaved={refreshSettings} />
         )}
+        {gameState === GameState.OPTIONS && (
+          <OptionsScreen onBack={() => { refreshSettings(); setGameState(GameState.TITLE); }} />
+        )}
         {gameState === GameState.LOADING && <LoadingScreen />}
         {gameState === GameState.PLAYING && (
-          <GameScreen 
-            difficulty={currentDifficulty} 
-            words={gameWords} 
-            onGameEnd={handleGameEnd} 
-            onExitGame={restartGame} 
-            fontType={fontType} 
+          <GameScreen
+            difficulty={currentDifficulty}
+            mode={currentMode}
+            words={gameWords}
+            onGameEnd={handleGameEnd}
+            onExitGame={backToTitle}
+            fontType={fontType}
+            effectLevel={gameSettings.effectLevel}
+            textSize={gameSettings.textSize}
           />
         )}
-        {gameState === GameState.RESULT && (
-          <ResultScreen stats={gameStats} onRestart={restartGame} onPrefetch={() => {}} />
+        {gameState === GameState.RESULT && gameStats && (
+          <ResultScreen
+            stats={gameStats}
+            rank={resultInfo.rank}
+            isNewBest={resultInfo.isNewBest}
+            prevBest={resultInfo.prevBest}
+            effectLevel={gameSettings.effectLevel}
+            onRetry={retryGame}
+            onBackToTitle={backToTitle}
+          />
         )}
       </main>
     </div>
