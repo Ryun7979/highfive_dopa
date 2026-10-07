@@ -65,11 +65,12 @@ class AudioManager {
 
   private getGain(level: VolumeLevel): number {
     switch (level) {
-      case 'HIGH': return 0.6;
-      case 'MEDIUM': return 0.3;
-      case 'LOW': return 0.1;
+      // 全体が小さいとユーザー指摘（2026-10-07）。もとの 0.6 / 0.3 / 0.1 を 1.5倍（約 +3.5dB）にした
+      case 'HIGH': return 0.9;
+      case 'MEDIUM': return 0.45;
+      case 'LOW': return 0.15;
       case 'OFF': return 0;
-      default: return 0.1;
+      default: return 0.15;
     }
   }
 
@@ -576,12 +577,15 @@ class AudioManager {
     const scale = this.scale;
     const note = 72 + scale[(Math.max(1, combo) - 1) % scale.length];
     const t = ctx.currentTime;
-    this.playBuffer('TYPE', (Math.random() * 50) - 25);
-    const v = this.voice;
-    const freq = this.midi(note);
-    this.tone(freq, t, v.dur, v.main, v.mainVol ?? 0.55, v.slide ? freq * v.slide : undefined);
-    this.tone(this.midi(note + v.overShift), t, v.dur * 0.45, v.over, v.overVol ?? 0.1);
-    if (v.sparkle) this.tone(this.midi(note + 31), t + 0.05, 0.18, 'sine', 0.18);
+    // もう少し大きくとユーザー指摘（2026-10-07）。1.4倍（約 +3dB）。打つたびに鳴るので曲は下げない
+    this.boosted(1.4, 0, () => {
+      this.playBuffer('TYPE', (Math.random() * 50) - 25);
+      const v = this.voice;
+      const freq = this.midi(note);
+      this.tone(freq, t, v.dur, v.main, v.mainVol ?? 0.55, v.slide ? freq * v.slide : undefined);
+      this.tone(this.midi(note + v.overShift), t, v.dur * 0.45, v.over, v.overVol ?? 0.1);
+      if (v.sparkle) this.tone(this.midi(note + 31), t + 0.05, 0.18, 'sine', 0.18);
+    });
   }
 
   // 単語クリア。ノーミス（PERFECT）はキラキラを足す

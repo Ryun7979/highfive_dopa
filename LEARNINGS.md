@@ -51,6 +51,7 @@
 - **保存キー**: `HIGHFIVE_DOPA_SAVE_V1`（自己ベスト・演出のつよさ・もじの大きさ）。音量は既存の `TYPING_MINI_VOLUME_V1`、フォントは `TYPING_MINI_SETTINGS_V1` のまま。
 - **保存データは version 2（キー名は `HIGHFIVE_DOPA_SAVE_V1` のまま）。** 書き換えは `mutateSave(fn)` に集約。足りない項目は `loadSave` が初期値で埋めるので、項目を足すだけなら version を上げなくてよい。
 - **音のバランスは `utils/audioManager.ts` に集約（v0.19）。** 曲は `MUSIC_GAIN`（曲ごと。ふつう 0.38、FEVER は 0.55。0.3 では小さいとユーザー指摘）、成功音は `boosted(倍率, 曲を下げる秒数, 中身)` で包んで大きくし、鳴っているあいだ曲を `DUCK_DEPTH`（0.45 倍。FEVER 中は 0.75 倍）に下げる。出口にリミッターがあるので、倍率を上げても音は割れにくい。新しい効果音を足すときは `boosted` で包む。
+- **全体の音量は `audioManager.ts` の `getGain`（おとの大きさ 大／中／小 の倍率）で決まる。** 2026-10-07 に「全体的に少し小さい」とユーザー指摘があり、0.6 / 0.3 / 0.1 → 0.9 / 0.45 / 0.15（1.5倍、約 +3.5dB）にした。曲と効果音のバランスは変わらない。耳では未確認。まだ小さければここだけ上げる（出口のリミッターは -4dB から効く）。同じ日に正打鍵の音（`playTypeNote`）も `boosted(1.4, 0, …)` で包んで約 +3dB にした（曲は下げない）。
 - **スキルの効果は `utils/skills.ts` の `getMods(skills)` が返す `GameMods` に集約。** プレイ画面は `mods` を props で受け取るだけ。新しいスキル効果は `GameMods` に項目を足す。ゴールデンワードは色と光だけ（`hx-gold-text` `hx-gold-border`）で、文字サイズには触れない。
 - **タイトルは「はちゃめちゃタイプ」（2026-10-06 決定）。デザインは「ネオン×ステッカー×コミック」。** 部品は `index.css` の `hx-*`（`hx-btn`＋色クラス、`hx-tag`、`hx-panel`、`hx-sticker`、`hx-burst`、`hx-gauge`、`hx-tape`）、色は Tailwind の `neon-*`（`:root` の CSS 変数と同じ値）。新しい画面はこの部品で組む。`brand-*` と開発者設定画面は元アプリのまま残してある。
 - **`hx-btn` と `hx-tag` は skewX(-8deg) で傾けてある。** 中身は `hx-btn-in`／`hx-unskew` で包んで傾きを戻す。傾けた部品に `dopa-wiggle` など transform のアニメを直接付けると傾きが消えるので、外側に1枚 div をかぶせて付ける。
