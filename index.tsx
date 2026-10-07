@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import StageShell, { needsStage } from './components/StageShell';
 
 // フォントは同梱（オフライン動作のため CDN を使わない）
 import '@fontsource/mochiy-pop-one/400.css';
@@ -20,9 +21,14 @@ if (!rootElement) {
   throw new Error("Could not find root element to mount to");
 }
 
+// 表示領域が低いとき（Windows の文字の大きさを最大にしたときなど）は、広い仮の画面に描いて縮める。
+// 読みこんだときに決める（途中で切り替えると、遊んでいる途中の状態が消えるため）
+const staged = needsStage();
+if (staged) document.body.style.overflow = 'hidden';
+
 const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
-    <App />
+    {staged ? <StageShell /> : <App />}
   </React.StrictMode>
 );
