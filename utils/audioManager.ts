@@ -37,10 +37,28 @@ const MUSIC_GAIN: Record<MusicTrack, number> = { title: 0.38, play: 0.38, fever:
 const DUCK_DEPTH = 0.45;
 const DUCK_DEPTH_FEVER = 0.75;
 const MUSIC_FADE = 0.35; // 曲を切り替えるときに重ねる秒数
-// ランク発表のジングル（public/assets/sounds/jingle/。Gemini で作成。docs/assets.md）
-const JINGLE_RANK_SRC = '/assets/sounds/jingle/jingle_rank.mp3';
+// 演出のジングル（public/assets/sounds/jingle/。Gemini で作った曲から切りだした。docs/assets.md）
+// offset は頭の余白（秒。ここから鳴らす）、vol は大きさをそろえる倍率（測定値）、
+// tail は終わりの余韻（秒。このあいだは BGM を戻しはじめてよい）。
+// end は鳴らし終える位置（秒。なければ最後まで）、fade は終わりを絞る秒数（なければ 0.2）、
+// cents は高さと速さを上げる量（100 で半音。702 で 1.5倍速）
+export type JingleName = 'rank' | 'fever' | 'bonus' | 'combo' | 'ssr' | 'levelup' | 'unlock';
+interface JingleDef { src: string; offset: number; vol: number; tail: number; end?: number; fade?: number; cents?: number }
+const JINGLES: Record<JingleName, JingleDef> = {
+  rank: { src: '/assets/sounds/jingle/jingle_rank.mp3', offset: 0, vol: 1, tail: 0 },
+  fever: { src: '/assets/sounds/jingle/jingle_fever.mp3', offset: 0.07, vol: 1.1, tail: 1.2 },
+  // ビートにのって3回かけ上がり、いちばん高い音で切る（曲の途中なので end で止める）
+  bonus: { src: '/assets/sounds/jingle/jingle_bonus.mp3', offset: 0.03, vol: 1, tail: 0.1, end: 2.76, fade: 0.12 },
+  // レベルアップの「階段をのぼって決める」を 1.5倍速で（ファイルはレベルアップと同じ）
+  combo: { src: '/assets/sounds/jingle/jingle_levelup.mp3', offset: 0.08, vol: 1.8, tail: 1, cents: 702 },
+  ssr: { src: '/assets/sounds/jingle/jingle_ssr.mp3', offset: 0.05, vol: 1.3, tail: 1.5 },
+  levelup: { src: '/assets/sounds/jingle/jingle_levelup.mp3', offset: 0.08, vol: 1.8, tail: 1.5 },
+  unlock: { src: '/assets/sounds/jingle/jingle_unlock.mp3', offset: 0.08, vol: 0.9, tail: 0.3 },
+};
 // ジングルもメロディのある曲なので、鳴っているあいだは BGM をほとんど聞こえないところまで下げる
 const DUCK_DEPTH_JINGLE = 0.12;
+// プレイ中の短いジングルは、曲のノリを切らないよう少し浅くする
+const DUCK_DEPTH_STINGER = 0.25;
 
 class AudioManager {
   private ctx: AudioContext | null = null;
@@ -121,6 +139,8 @@ class AudioManager {
       
       // Generate sounds in memory (Procedural Audio)
       this.generateAllSounds();
+      // 短いジングルは、いつ鳴ってもよいように先に読んでおく（ランク発表の長いものはリザルトで読む）
+      (Object.keys(JINGLES) as JingleName[]).filter(n => n !== 'rank').forEach(n => this.preloadJingle(n));
     }
     
     if (this.ctx.state === 'suspended') {
@@ -352,59 +372,87 @@ class AudioManager {
   }
 
   // --- ジングル（曲のファイルを1回だけ鳴らす）---
-  private jingleBuffer: AudioBuffer | null = null;
-  private jingleLoading = false;
-  private jingleNow: { source: AudioBufferSourceNode; gain: GainNode } | null = null;
+  private jingleBuffers = new Map<string, AudioBuffer>(); // ファイル（src）ごと
+  private jingleLoading = new Set<string>();
+  private jinglesNow = new Set<{ source: AudioBufferSourceNode; gain: GainNode }>();
+
+  private preloadJingle(name: JingleName) {
+    const ctx = this.ctx;
+    const src = JINGLES[name].src;
+    if (!ctx || this.jingleBuffers.has(src) || this.jingleLoading.has(src)) return;
+    this.jingleLoading.add(src);
+    fetch(src)
+      .then(res => (res.ok ? res.arrayBuffer() : Promise.reject(new Error(String(res.status)))))
+      .then(data => ctx.decodeAudioData(data))
+      .then(buffer => { if (this.ctx === ctx) this.jingleBuffers.set(src, buffer); })
+      .catch(() => {})
+      .finally(() => { this.jingleLoading.delete(src); });
+  }
+
+  // 鳴らせたら true。まだ読めていなければ false（呼んだ側が合成の音で代える）。
+  // raise で、表の高さからさらに上げられる（100 で半音）
+  private playJingle(name: JingleName, depth: number = DUCK_DEPTH_STINGER, raise: number = 0): boolean {
+    const ctx = this.ctx;
+    const def = JINGLES[name];
+    const buffer = this.jingleBuffers.get(def.src);
+    if (!ctx || !this.masterGain || !buffer) return false;
+    const { offset, vol, tail } = def;
+    const cents = (def.cents ?? 0) + raise;
+    const dur = ((def.end ?? buffer.duration) - offset) / Math.pow(2, cents / 1200);
+    const now = ctx.currentTime;
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.detune.value = cents;
+    const gain = ctx.createGain();
+    // 切りだした終わりがぷつっと切れないよう、最後だけ絞る
+    gain.gain.setValueAtTime(vol, now);
+    gain.gain.setValueAtTime(vol, now + Math.max(0, dur - (def.fade ?? 0.2)));
+    gain.gain.linearRampToValueAtTime(0, now + dur);
+    source.connect(gain);
+    gain.connect(this.masterGain);
+    source.start(now, offset);
+    source.stop(now + dur + 0.02);
+    const playing = { source, gain };
+    this.jinglesNow.add(playing);
+    source.onended = () => { this.jinglesNow.delete(playing); };
+    this.duckMusic(Math.max(0.3, dur - tail), depth);
+    return true;
+  }
 
   // 発表の前（ドラムロールのあいだ）に読んでおく
   public preloadRankJingle() {
-    const ctx = this.ready();
-    if (!ctx || this.jingleBuffer || this.jingleLoading) return;
-    this.jingleLoading = true;
-    fetch(JINGLE_RANK_SRC)
-      .then(res => (res.ok ? res.arrayBuffer() : Promise.reject(new Error(String(res.status)))))
-      .then(data => ctx.decodeAudioData(data))
-      .then(buffer => { if (this.ctx === ctx) this.jingleBuffer = buffer; })
-      .catch(() => {})
-      .finally(() => { this.jingleLoading = false; });
+    if (this.ready()) this.preloadJingle('rank');
   }
 
   // ランク発表のファンファーレ。まだ読めていなければ、合成のファンファーレで代える
   public playRankJingle() {
-    const ctx = this.ready();
-    if (!ctx) return;
-    const buffer = this.jingleBuffer;
-    if (!buffer) {
+    if (!this.ready()) return;
+    if (!this.jingleBuffers.has(JINGLES.rank.src)) {
       this.playFanfare();
       return;
     }
     this.stopJingle();
-    const now = ctx.currentTime;
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    const gain = ctx.createGain();
-    // 切りだした終わりがぷつっと切れないよう、最後だけ絞る
-    gain.gain.setValueAtTime(1, now + Math.max(0, buffer.duration - 0.2));
-    gain.gain.linearRampToValueAtTime(0, now + buffer.duration);
-    source.connect(gain);
-    gain.connect(this.masterGain!);
-    source.start(now);
-    const playing = { source, gain };
-    this.jingleNow = playing;
-    source.onended = () => { if (this.jingleNow === playing) this.jingleNow = null; };
-    this.duckMusic(buffer.duration, DUCK_DEPTH_JINGLE);
+    this.playJingle('rank', DUCK_DEPTH_JINGLE);
+  }
+
+  // ガチャの SSR が出た瞬間のファンファーレ
+  public playSsr() {
+    if (!this.ready()) return;
+    if (this.playJingle('ssr', DUCK_DEPTH_JINGLE)) return;
+    this.playUnlock(true);
   }
 
   // 画面をはなれるときに止める（8秒あるので、次のプレイにかぶらないように）
   public stopJingle() {
-    const playing = this.jingleNow;
-    if (!playing || !this.ctx) return;
-    this.jingleNow = null;
+    if (!this.jinglesNow.size || !this.ctx) return;
     const now = this.ctx.currentTime;
-    playing.gain.gain.cancelScheduledValues(now);
-    playing.gain.gain.setValueAtTime(playing.gain.gain.value, now);
-    playing.gain.gain.linearRampToValueAtTime(0, now + 0.15);
-    playing.source.stop(now + 0.2);
+    for (const playing of this.jinglesNow) {
+      playing.gain.gain.cancelScheduledValues(now);
+      playing.gain.gain.setValueAtTime(playing.gain.gain.value, now);
+      playing.gain.gain.linearRampToValueAtTime(0, now + 0.15);
+      playing.source.stop(now + 0.2);
+    }
+    this.jinglesNow.clear();
     // 下げていた曲を戻す
     this.duckEnd = 0;
     if (this.musicBus) {
@@ -511,6 +559,7 @@ class AudioManager {
   public playBonusStart(double: boolean) {
     const ctx = this.ready();
     if (!ctx) return;
+    if (this.playJingle('bonus')) return;
     this.boosted(2.0, 0.9, () => {
       const t = ctx.currentTime;
       this.tone(400, t, 0.3, 'square', 0.25, 1600);
@@ -544,6 +593,7 @@ class AudioManager {
   public playLevelUp() {
     const ctx = this.ready();
     if (!ctx) return;
+    if (this.playJingle('levelup', DUCK_DEPTH_JINGLE)) return;
     this.boosted(2.2, 1.2, () => {
       const t = ctx.currentTime;
       [72, 76, 79, 84, 79, 84, 88, 96].forEach((n, i) => {
@@ -556,10 +606,13 @@ class AudioManager {
     });
   }
 
-  // スキル解放・ガチャの当たりなどの「ジャジャーン」
-  public playUnlock() {
+  // スキル解放・ガチャの当たりなどの「ジャジャーン」。
+  // fanfare は、ジングルが読めていないときに合成のファンファーレも重ねるか（ガチャの SR 以上）
+  public playUnlock(fanfare: boolean = false) {
     const ctx = this.ready();
     if (!ctx) return;
+    if (this.playJingle('unlock')) return;
+    if (fanfare) this.playFanfare();
     this.boosted(1.7, 0.8, () => {
       const t = ctx.currentTime;
       this.tone(200, t, 0.25, 'sawtooth', 0.3, 1200);
@@ -627,6 +680,8 @@ class AudioManager {
   public playComboUp(level: number) {
     const ctx = this.ready();
     if (!ctx) return;
+    // 段階が上がるほど半音ずつ高くする
+    if (this.playJingle('combo', DUCK_DEPTH_STINGER, (level - 1) * 100)) return;
     this.boosted(2.0, 0.7, () => {
       const t = ctx.currentTime;
       this.tone(220, t, 0.3, 'sawtooth', 0.3, 880 * (1 + level * 0.25));
@@ -654,9 +709,12 @@ class AudioManager {
     });
   }
 
-  public playFeverStart() {
+  // FEVER 突入。FEVER に入る瞬間（まだ FEVER の曲でないとき）はジングル、
+  // FEVER 中の段階アップなどは合成の音。jingle を false にすると、いつも合成の音
+  public playFeverStart(jingle: boolean = true) {
     const ctx = this.ready();
     if (!ctx) return;
+    if (jingle && this.musicWanted !== 'fever' && this.playJingle('fever')) return;
     this.boosted(1.5, 1.5, () => {
       const t = ctx.currentTime;
       this.tone(300, t, 0.35, 'sawtooth', 0.35, 1800);
@@ -949,8 +1007,8 @@ class AudioManager {
     window.clearTimeout(this.musicRetry);
     for (const m of this.music.values()) m.el.pause();
     this.music.clear();
-    this.jingleNow = null; // 鳴っていても、下の ctx.close() で止まる
-    this.jingleBuffer = null;
+    this.jinglesNow.clear(); // 鳴っていても、下の ctx.close() で止まる
+    this.jingleBuffers.clear();
     this.musicWanted = null;
     this.musicNow = null;
     this.ctx?.close();

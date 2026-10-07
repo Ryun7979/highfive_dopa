@@ -92,10 +92,11 @@ const GachaScreen: React.FC<GachaScreenProps> = ({ effectLevel = 'max', onBack, 
     setResult(r);
     const level = RARITIES.indexOf(r.item.rarity);
     audioManager.playGachaOpen();
-    if (level >= 3) audioManager.playRankSlam(true);
-    if (level >= 2) {
-      audioManager.playUnlock();
-      audioManager.playFanfare();
+    if (level >= 3) {
+      audioManager.playRankSlam(true);
+      audioManager.playSsr();
+    } else if (level >= 2) {
+      audioManager.playUnlock(true);
     } else {
       audioManager.playWordClear(level >= 1);
     }
@@ -138,7 +139,7 @@ const GachaScreen: React.FC<GachaScreenProps> = ({ effectLevel = 'max', onBack, 
     }
     setPhase('cutin');
     audioManager.playGachaOpen();
-    audioManager.playFeverStart();
+    audioManager.playFeverStart(false); // すぐあとに SSR のジングルが鳴るので、ここは合成の音
     fxRef.current?.flash('#FFFFFF', 0.9);
     timerRef.current = window.setTimeout(finish, GACHA_CUTIN_MS);
   };
